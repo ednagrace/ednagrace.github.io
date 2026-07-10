@@ -48,11 +48,19 @@
     reports: 'edna.reports.cache',
     queue:   'edna.queue',
     metas:   'edna.metas',
+    session: 'edna.session',
   };
 
+  // Emails autorizados (o back-end também confere — isto é só para a UX).
+  const ALLOWLIST = [
+    'ednapromotora69@gmail.com',
+    'edna.cristina.g69@gmail.com',
+    'jpantunesdesouza@gmail.com',
+  ];
+
   const defaultConfig = {
-    endpoint: '',                 // URL do Web App (Apps Script) — definida nas Configurações
-    token:    'edna-savegnago-2026',
+    apiBase:  'https://relatorio-api.vercel.app',  // base da API (Vercel)
+    googleClientId: '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com',
     promotora:'Edna Grace',
     loja:     'Savegnago',
     metaDia:  3,                  // meta diária de propostas aprovadas (editável)
@@ -69,6 +77,7 @@
     reports: load(LS.reports, []),        // cache local dos relatórios
     queue:   load(LS.queue, []),          // relatórios aguardando envio (offline)
     metas:   load(LS.metas, {}),          // { 'YYYY-MM': número }
+    session: load(LS.session, {}),        // { token, email, name, exp }
     view:    'list',
     month:   currentMonthKey(),
     search:  '',
@@ -91,27 +100,96 @@
 
   /* ---------- Rede / API ---------- */
   function isOnline() { return navigator.onLine; }
+  function apiUrl(path) { return String(state.config.apiBase || '').replace(/\/$/, '') + path; }
+  function authHeaders() {
+    return { 'Authorization': 'Bearer ' + (state.session.token || ''), 'Content-Type': 'application/json' };
+  }
 
   async function apiList() {
-    if (!state.config.endpoint) return null;
-    const url = state.config.endpoint + '?token=' + encodeURIComponent(state.config.token) + '&_=' + Date.now();
-    const res = await fetch(url, { method: 'GET' });
+    if (!state.config.apiBase || !sessionValid()) return null;
+    const res = await fetch(apiUrl('/api/reports'), { headers: authHeaders() });
+    if (res.status === 401) { refreshSession(); throw new Error('sessão expirada'); }
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'Erro ao listar');
     return data.reports || [];
   }
 
   async function apiSave(report) {
-    if (!state.config.endpoint) throw new Error('Configure o link da planilha primeiro.');
-    // text/plain evita "preflight" CORS no Apps Script.
-    const res = await fetch(state.config.endpoint, {
+    if (!state.config.apiBase) throw new Error('API não configurada.');
+    const res = await fetch(apiUrl('/api/reports'), {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ token: state.config.token, report }),
+      headers: authHeaders(),
+      body: JSON.stringify({ report }),
     });
+    if (res.status === 401) { refreshSession(); throw new Error('sessão expirada'); }
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'Erro ao salvar');
     return data;
+  }
+
+  /* ---------- Autenticação Google (login uma vez → sessão de 60 dias) ---------- */
+  function isAllowed(email) {
+    return !!email && ALLOWLIST.indexOf(String(email).toLowerCase()) !== -1;
+  }
+  function sessionValid() {
+    return !!(state.session && state.session.token && state.session.exp &&
+             (state.session.exp * 1000 > Date.now()));
+  }
+
+  let gisTries = 0;
+  function initGis(onReady) {
+    if (window.google && google.accounts && google.accounts.id && state.config.googleClientId) {
+      if (!initGis._done) {
+        google.accounts.id.initialize({
+          client_id: state.config.googleClientId,
+          callback: onGoogleCredential,
+          auto_select: true,
+          itp_support: true,
+          cancel_on_tap_outside: false,
+        });
+        initGis._done = true;
+      }
+      if (onReady) onReady();
+      return true;
+    }
+    if (gisTries++ < 40) setTimeout(() => initGis(onReady), 150);
+    return false;
+  }
+
+  // Troca o ID token do Google pela nossa sessão longa (via /api/login).
+  async function onGoogleCredential(resp) {
+    if (!resp || !resp.credential) return;
+    try {
+      const r = await fetch(apiUrl('/api/login'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: resp.credential }),
+      });
+      const data = await r.json();
+      if (!data.ok) {
+        if (r.status === 403) return showDenied(data.email || '');
+        return toast(data.error || 'Falha no login', 'err');
+      }
+      state.session = { token: data.session, email: data.email, name: data.name || '', exp: data.exp };
+      save(LS.session, state.session);
+      render();
+      postAuthInit();
+    } catch (e) {
+      toast('Sem conexão para completar o login', 'err');
+    }
+  }
+
+  // Tenta reemitir a sessão silenciosamente (One Tap com auto_select).
+  function refreshSession() {
+    if (!initGis()) return;
+    try { google.accounts.id.prompt(); } catch (e) {}
+  }
+
+  function logout() {
+    try { if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect(); } catch (e) {}
+    state.session = {};
+    save(LS.session, state.session);
+    showLogin();
   }
 
   /* ---------- Fila offline ---------- */
@@ -123,7 +201,7 @@
   }
 
   async function flushQueue(silent) {
-    if (state.syncing || !isOnline() || !state.config.endpoint) return;
+    if (state.syncing || !isOnline() || !state.config.apiBase || !sessionValid()) return;
     if (state.queue.length === 0) return;
     state.syncing = true;
     const pending = state.queue.slice();
@@ -140,7 +218,7 @@
   }
 
   async function refreshFromCloud(silent) {
-    if (!state.config.endpoint || !isOnline()) return;
+    if (!state.config.apiBase || !isOnline() || !sessionValid()) return;
     try {
       const remote = await apiList();
       if (remote) {
@@ -149,7 +227,7 @@
         render();
       }
     } catch (e) {
-      if (!silent) toast('Sem conexão com a planilha', 'err');
+      if (!silent) toast('Sem conexão com o servidor', 'err');
     }
   }
 
@@ -192,8 +270,46 @@
   const app = document.getElementById('app');
 
   function render() {
+    if (!sessionValid()) return showLogin();
     if (state.view === 'form') return renderForm();
     return renderList();
+  }
+
+  /* ---------------- TELAS DE LOGIN ---------------- */
+  function showLogin() {
+    app.innerHTML = `
+      <div class="auth-screen">
+        <div class="auth-card">
+          <div class="auth-logo">📋</div>
+          <h1>Relatório Diário</h1>
+          <p class="auth-sub">${esc(state.config.promotora)} · ${esc(state.config.loja)}</p>
+          <div id="gbtn" class="gbtn-wrap"></div>
+          <p class="auth-note">Entre com a conta Google autorizada.<br>Você só faz isso uma vez.</p>
+          <button class="auth-admin" id="auth-config">⚙️ Configurações</button>
+        </div>
+      </div>`;
+    byId('auth-config').onclick = openConfig;
+    initGis(() => {
+      try {
+        google.accounts.id.renderButton(byId('gbtn'),
+          { theme: 'filled_blue', size: 'large', shape: 'pill', text: 'signin_with', width: 260 });
+        google.accounts.id.prompt();
+      } catch (e) {}
+    });
+  }
+
+  function showDenied(email) {
+    app.innerHTML = `
+      <div class="auth-screen">
+        <div class="auth-card">
+          <div class="auth-logo">🚫</div>
+          <h1>Acesso negado</h1>
+          <p class="auth-sub">${esc(email || '')}</p>
+          <p class="auth-note">Este email não tem permissão para usar o app.</p>
+          <button class="auth-admin" id="auth-switch">Entrar com outra conta</button>
+        </div>
+      </div>`;
+    byId('auth-switch').onclick = logout;
   }
 
   /* ---------------- TELA: LISTAGEM ---------------- */
@@ -505,9 +621,9 @@
     // atualiza também o cache para aparecer na lista já sincronizado-visual
     upsertCache(r);
 
-    // 2) tenta enviar para a nuvem
+    // 2) tenta enviar para o servidor (Neon)
     let sent = false;
-    if (isOnline() && state.config.endpoint) {
+    if (isOnline() && state.config.apiBase && sessionValid()) {
       try {
         await apiSave(r);
         state.queue = state.queue.filter(x => x.data !== r.data);
@@ -519,7 +635,7 @@
     state.view = 'list';
     state.month = monthKeyOf(r.data);
     render();
-    toast(sent ? 'Relatório enviado para a planilha ✓'
+    toast(sent ? 'Relatório salvo no servidor ✓'
                : 'Salvo no celular — envia quando tiver internet ⏳',
           sent ? 'ok' : '');
   }
@@ -535,21 +651,25 @@
   function openMenu() {
     openSheet(`
       <h2>Menu</h2>
-      <button class="menu-item" id="mi-config">
-        <span class="mi-ico">🔧</span>
-        <span>Configurações<small>Link da planilha, nome, loja</small></span>
-      </button>
       <button class="menu-item" id="mi-sync">
         <span class="mi-ico">🔄</span>
         <span>Sincronizar agora<small>Baixar/enviar relatórios</small></span>
       </button>
       <button class="menu-item" id="mi-csv">
         <span class="mi-ico">📤</span>
-        <span>Exportar CSV (mês)<small>Abrir/compartilhar planilha do mês</small></span>
+        <span>Exportar CSV (mês)<small>Baixar/compartilhar planilha do mês</small></span>
       </button>
       <button class="menu-item" id="mi-share">
         <span class="mi-ico">💬</span>
         <span>Compartilhar resumo do dia<small>Enviar por WhatsApp</small></span>
+      </button>
+      <button class="menu-item" id="mi-config">
+        <span class="mi-ico">🔧</span>
+        <span>Configurações<small>Servidor, Google, nome, loja</small></span>
+      </button>
+      <button class="menu-item" id="mi-logout">
+        <span class="mi-ico">🚪</span>
+        <span>Sair<small>${esc(state.session.email || '')}</small></span>
       </button>
       <div class="status-line" id="cfg-status" style="margin-top:12px"></div>
     `, () => {
@@ -563,8 +683,9 @@
       };
       byId('mi-csv').onclick = () => { closeSheet(); exportCSV(); };
       byId('mi-share').onclick = () => { closeSheet(); shareToday(); };
+      byId('mi-logout').onclick = () => { closeSheet(); logout(); };
       const st = byId('cfg-status');
-      st.textContent = state.config.endpoint ? '✓ Planilha conectada' : '⚠ Planilha não configurada';
+      st.textContent = state.config.apiBase ? '✓ Conectado ao servidor' : '⚠ Servidor não configurado';
     });
   }
 
@@ -572,13 +693,14 @@
     const c = state.config;
     openSheet(`
       <h2>Configurações</h2>
+      ${state.session.email ? `<div class="status-line" style="margin-bottom:12px">Logado como <b>${esc(state.session.email)}</b></div>` : ''}
       <div class="field">
-        <label>Link do Web App (planilha)</label>
-        <input id="c-endpoint" type="url" inputmode="url" placeholder="https://script.google.com/macros/s/.../exec" value="${esc(c.endpoint)}" />
+        <label>Link da API (Vercel)</label>
+        <input id="c-api" type="url" inputmode="url" placeholder="https://relatorio-api.vercel.app" value="${esc(c.apiBase)}" />
       </div>
       <div class="field">
-        <label>Senha/Token (mesmo do script)</label>
-        <input id="c-token" type="text" value="${esc(c.token)}" />
+        <label>Google Client ID</label>
+        <input id="c-gid" type="text" value="${esc(c.googleClientId)}" />
       </div>
       <div class="field">
         <label>Promotora</label>
@@ -593,17 +715,17 @@
         <input id="c-metadia" type="number" inputmode="numeric" min="0" value="${esc(c.metaDia != null ? c.metaDia : 3)}" />
       </div>
       <div class="actions">
-        <button class="secondary" id="c-test">Testar conexão</button>
+        <button class="secondary" id="c-test">Testar API</button>
         <button class="primary" id="c-save">Salvar</button>
       </div>
       <div class="status-line" id="c-status"></div>
     `, () => {
       byId('c-save').onclick = () => {
-        state.config.endpoint  = byId('c-endpoint').value.trim();
-        state.config.token     = byId('c-token').value.trim();
-        state.config.promotora = byId('c-prom').value.trim() || 'Edna Grace';
-        state.config.loja      = byId('c-loja').value.trim() || 'Savegnago';
-        state.config.metaDia   = Math.max(0, Number(byId('c-metadia').value) || 3);
+        state.config.apiBase        = byId('c-api').value.trim();
+        state.config.googleClientId = byId('c-gid').value.trim();
+        state.config.promotora      = byId('c-prom').value.trim() || 'Edna Grace';
+        state.config.loja           = byId('c-loja').value.trim() || 'Savegnago';
+        state.config.metaDia        = Math.max(0, Number(byId('c-metadia').value) || 3);
         save(LS.config, state.config);
         closeSheet();
         toast('Configurações salvas ✓', 'ok');
@@ -612,17 +734,15 @@
       };
       byId('c-test').onclick = async () => {
         const st = byId('c-status'); st.textContent = 'Testando...';
-        const backupEp = state.config.endpoint, backupTk = state.config.token;
-        state.config.endpoint = byId('c-endpoint').value.trim();
-        state.config.token = byId('c-token').value.trim();
+        const base = byId('c-api').value.trim().replace(/\/$/, '');
         try {
-          const list = await apiList();
-          st.textContent = '✓ Conectado! ' + (list ? list.length : 0) + ' relatório(s) na planilha.';
-          st.style.color = '#1e9e57';
+          const res = await fetch(base + '/api/reports'); // sem sessão → 401 esperado
+          if (res.status === 401) { st.textContent = '✓ API acessível (faça login para usar).'; st.style.color = '#1e9e57'; }
+          else if (res.ok) { st.textContent = '✓ API acessível.'; st.style.color = '#1e9e57'; }
+          else { st.textContent = 'Resposta inesperada: HTTP ' + res.status; st.style.color = '#e08a00'; }
         } catch (e) {
-          st.textContent = '✗ Falhou: ' + e.message;
+          st.textContent = '✗ Não alcançou a API: ' + e.message;
           st.style.color = '#d10a11';
-          state.config.endpoint = backupEp; state.config.token = backupTk;
         }
       };
     });
@@ -850,9 +970,15 @@
   window.addEventListener('online',  () => { render(); flushQueue(false); refreshFromCloud(true); });
   window.addEventListener('offline', () => { render(); });
 
+  function postAuthInit() {
+    refreshFromCloud(true);
+    flushQueue(true);
+  }
+
   /* ---------------- Início ---------------- */
-  render();
-  // primeira carga: puxa da nuvem e envia pendências
-  refreshFromCloud(true);
-  flushQueue(true);
+  function boot() {
+    if (sessionValid()) { render(); postAuthInit(); }
+    else { showLogin(); }
+  }
+  boot();
 })();

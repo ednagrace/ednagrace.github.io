@@ -1,6 +1,6 @@
 /* Service Worker — cache do app (funciona offline).
    Troque a versão (v1 -> v2...) sempre que atualizar os arquivos. */
-const CACHE = 'edna-relatorio-v9';
+const CACHE = 'edna-relatorio-v10';
 const ASSETS = [
   './',
   './index.html',
@@ -23,11 +23,9 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-  // Nunca cacheia chamadas ao Apps Script (sempre rede).
-  if (req.url.includes('script.google.com') || req.url.includes('script.googleusercontent.com')) {
-    return; // deixa passar direto para a rede
-  }
   if (req.method !== 'GET') return;
+  // Só cacheia o próprio site (mesma origem). API (Vercel) e Google passam direto.
+  if (new URL(req.url).origin !== self.location.origin) return;
 
   // App shell: cache-first com atualização em segundo plano.
   e.respondWith(
