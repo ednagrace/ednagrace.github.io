@@ -713,7 +713,7 @@
       </button>
       <button class="menu-item" id="mi-config">
         <span class="mi-ico">🔧</span>
-        <span>Configurações<small>Servidor, Google, nome, loja</small></span>
+        <span>Configurações<small>Promotora, loja e meta do dia</small></span>
       </button>
       <button class="menu-item" id="mi-logout">
         <span class="mi-ico">🚪</span>
