@@ -132,6 +132,16 @@
     return data;
   }
 
+  async function apiDelete(dataISO) {
+    const res = await fetch(apiUrl('/api/reports?data=' + encodeURIComponent(dataISO)), {
+      method: 'DELETE', headers: authHeaders(),
+    });
+    if (res.status === 401) { refreshSession(); throw new Error('sessão expirada'); }
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Erro ao excluir');
+    return data;
+  }
+
   /* ---------- Autenticação Google (login uma vez → sessão de 60 dias) ---------- */
   function isAllowed(email) {
     return !!email && ALLOWLIST.indexOf(String(email).toLowerCase()) !== -1;
@@ -563,6 +573,7 @@
           <h1>${getReport(r.data) ? 'Editar' : 'Novo'} Relatório</h1>
           <span class="sub">${esc(state.config.promotora)} · ${esc(state.config.loja)}</span>
         </div>
+        ${getReport(r.data) ? '<button class="iconbtn" id="btn-del" aria-label="Excluir">🗑️</button>' : ''}
       </header>
 
       <div class="screen">
@@ -595,9 +606,34 @@
     byId('f-obs').oninput = (e) => { r.obs = e.target.value; };
     byId('btn-save').onclick = onSave;
     byId('btn-pdf').onclick = () => sharePDF(Object.assign({}, r));
+    if (byId('btn-del')) byId('btn-del').onclick = onDelete;
 
     // liga os contadores
     ALL_FIELDS.forEach(f => wireCounter(f, r));
+  }
+
+  async function onDelete() {
+    const r = state.editing;
+    if (!getReport(r.data)) { state.view = 'list'; render(); return; }
+    const d = parseISO(r.data);
+    const quando = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
+    if (!window.confirm('Excluir o relatório de ' + quando + '?\n\nEsta ação não pode ser desfeita.')) return;
+    if (!isOnline() || !sessionValid()) { toast('Conecte à internet para excluir', 'err'); return; }
+    const btn = byId('btn-del');
+    if (btn) btn.disabled = true;
+    try {
+      await apiDelete(r.data);
+      state.reports = state.reports.filter(x => x.data !== r.data);
+      state.queue = state.queue.filter(x => x.data !== r.data);
+      save(LS.reports, state.reports);
+      save(LS.queue, state.queue);
+      state.view = 'list';
+      render();
+      toast('Relatório excluído', 'ok');
+    } catch (e) {
+      if (btn) btn.disabled = false;
+      toast('Não foi possível excluir: ' + e.message, 'err');
+    }
   }
 
   function counterHTML(f, val) {
