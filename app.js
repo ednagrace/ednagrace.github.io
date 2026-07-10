@@ -49,6 +49,7 @@
     queue:   'edna.queue',
     metas:   'edna.metas',
     session: 'edna.session',
+    settingsPending: 'edna.settingsPending',
   };
 
   // Emails autorizados (o back-end também confere — isto é só para a UX).
@@ -58,12 +59,16 @@
     'jpantunesdesouza@gmail.com',
   ];
 
+  // Configuração fixa do site (produção) — igual para qualquer navegador/aparelho.
+  // Não são segredos (a API só aceita sessão válida de um email da allowlist).
+  const API_BASE = 'https://relatorio-api.vercel.app';
+  const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
+
+  // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
-    apiBase:  'https://relatorio-api.vercel.app',  // base da API (Vercel)
-    googleClientId: '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com',
     promotora:'Edna Grace',
     loja:     'Savegnago',
-    metaDia:  3,                  // meta diária de propostas aprovadas (editável)
+    metaDia:  3,                  // meta diária de cartões aprovados (editável)
   };
 
   function load(key, fallback) {
@@ -100,13 +105,13 @@
 
   /* ---------- Rede / API ---------- */
   function isOnline() { return navigator.onLine; }
-  function apiUrl(path) { return String(state.config.apiBase || '').replace(/\/$/, '') + path; }
+  function apiUrl(path) { return String(API_BASE || '').replace(/\/$/, '') + path; }
   function authHeaders() {
     return { 'Authorization': 'Bearer ' + (state.session.token || ''), 'Content-Type': 'application/json' };
   }
 
   async function apiList() {
-    if (!state.config.apiBase || !sessionValid()) return null;
+    if (!API_BASE || !sessionValid()) return null;
     const res = await fetch(apiUrl('/api/reports'), { headers: authHeaders() });
     if (res.status === 401) { refreshSession(); throw new Error('sessão expirada'); }
     const data = await res.json();
@@ -115,7 +120,7 @@
   }
 
   async function apiSave(report) {
-    if (!state.config.apiBase) throw new Error('API não configurada.');
+    if (!API_BASE) throw new Error('API não configurada.');
     const res = await fetch(apiUrl('/api/reports'), {
       method: 'POST',
       headers: authHeaders(),
@@ -138,10 +143,10 @@
 
   let gisTries = 0;
   function initGis(onReady) {
-    if (window.google && google.accounts && google.accounts.id && state.config.googleClientId) {
+    if (window.google && google.accounts && google.accounts.id && GOOGLE_CLIENT_ID) {
       if (!initGis._done) {
         google.accounts.id.initialize({
-          client_id: state.config.googleClientId,
+          client_id: GOOGLE_CLIENT_ID,
           callback: onGoogleCredential,
           auto_select: true,
           itp_support: true,
@@ -192,6 +197,49 @@
     showLogin();
   }
 
+  /* ---------- Configurações compartilhadas no Neon (metas, promotora, loja) ---------- */
+  function businessSettings() {
+    return {
+      metas: state.metas,
+      metaDia: Number(state.config.metaDia) || 3,
+      promotora: state.config.promotora,
+      loja: state.config.loja,
+    };
+  }
+  // Chamado quando o usuário muda uma meta ou config: guarda pendência e tenta enviar.
+  function saveSettingsRemote() {
+    save(LS.settingsPending, businessSettings());
+    flushSettings();
+  }
+  async function flushSettings() {
+    const pending = load(LS.settingsPending, null);
+    if (!pending || !API_BASE || !sessionValid() || !isOnline()) return;
+    try {
+      const res = await fetch(apiUrl('/api/settings'), {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ settings: pending }),
+      });
+      if (res.ok) localStorage.removeItem(LS.settingsPending);
+    } catch (e) {}
+  }
+  // Baixa as configurações do Neon e aplica (fonte compartilhada entre aparelhos/logins).
+  async function pullSettings() {
+    if (!API_BASE || !sessionValid() || !isOnline()) return;
+    try {
+      const res = await fetch(apiUrl('/api/settings'), { headers: authHeaders() });
+      if (res.status === 401) { refreshSession(); return; }
+      const data = await res.json();
+      if (data && data.ok && data.settings) {
+        const s = data.settings;
+        if (s.metas && typeof s.metas === 'object') { state.metas = Object.assign({}, s.metas); save(LS.metas, state.metas); }
+        if (typeof s.metaDia !== 'undefined') state.config.metaDia = Number(s.metaDia) || 0;
+        if (s.promotora) state.config.promotora = s.promotora;
+        if (s.loja) state.config.loja = s.loja;
+        save(LS.config, state.config);
+        render();
+      }
+    } catch (e) {}
+  }
+
   /* ---------- Fila offline ---------- */
   function enqueue(report) {
     // substitui item da mesma data na fila
@@ -201,7 +249,7 @@
   }
 
   async function flushQueue(silent) {
-    if (state.syncing || !isOnline() || !state.config.apiBase || !sessionValid()) return;
+    if (state.syncing || !isOnline() || !API_BASE || !sessionValid()) return;
     if (state.queue.length === 0) return;
     state.syncing = true;
     const pending = state.queue.slice();
@@ -218,7 +266,7 @@
   }
 
   async function refreshFromCloud(silent) {
-    if (!state.config.apiBase || !isOnline() || !sessionValid()) return;
+    if (!API_BASE || !isOnline() || !sessionValid()) return;
     try {
       const remote = await apiList();
       if (remote) {
@@ -285,10 +333,8 @@
           <p class="auth-sub">${esc(state.config.promotora)} · ${esc(state.config.loja)}</p>
           <div id="gbtn" class="gbtn-wrap"></div>
           <p class="auth-note">Entre com a conta Google autorizada.<br>Você só faz isso uma vez.</p>
-          <button class="auth-admin" id="auth-config">⚙️ Configurações</button>
         </div>
       </div>`;
-    byId('auth-config').onclick = openConfig;
     initGis(() => {
       try {
         google.accounts.id.renderButton(byId('gbtn'),
@@ -468,6 +514,7 @@
     const v = window.prompt(`Meta de cartões aprovados para ${MONTHS[m-1]} ${y}:`, cur);
     if (v === null) return;
     setMeta(state.month, v);
+    saveSettingsRemote();
     render();
   }
 
@@ -476,6 +523,7 @@
     if (v === null) return;
     state.config.metaDia = Math.max(0, Number(v) || 0);
     save(LS.config, state.config);
+    saveSettingsRemote();
     render();
   }
 
@@ -623,7 +671,7 @@
 
     // 2) tenta enviar para o servidor (Neon)
     let sent = false;
-    if (isOnline() && state.config.apiBase && sessionValid()) {
+    if (isOnline() && API_BASE && sessionValid()) {
       try {
         await apiSave(r);
         state.queue = state.queue.filter(x => x.data !== r.data);
@@ -685,7 +733,7 @@
       byId('mi-share').onclick = () => { closeSheet(); shareToday(); };
       byId('mi-logout').onclick = () => { closeSheet(); logout(); };
       const st = byId('cfg-status');
-      st.textContent = state.config.apiBase ? '✓ Conectado ao servidor' : '⚠ Servidor não configurado';
+      st.textContent = API_BASE ? '✓ Conectado ao servidor' : '⚠ Servidor não configurado';
     });
   }
 
@@ -694,14 +742,6 @@
     openSheet(`
       <h2>Configurações</h2>
       ${state.session.email ? `<div class="status-line" style="margin-bottom:12px">Logado como <b>${esc(state.session.email)}</b></div>` : ''}
-      <div class="field">
-        <label>Link da API (Vercel)</label>
-        <input id="c-api" type="url" inputmode="url" placeholder="https://relatorio-api.vercel.app" value="${esc(c.apiBase)}" />
-      </div>
-      <div class="field">
-        <label>Google Client ID</label>
-        <input id="c-gid" type="text" value="${esc(c.googleClientId)}" />
-      </div>
       <div class="field">
         <label>Promotora</label>
         <input id="c-prom" type="text" value="${esc(c.promotora)}" />
@@ -715,35 +755,17 @@
         <input id="c-metadia" type="number" inputmode="numeric" min="0" value="${esc(c.metaDia != null ? c.metaDia : 3)}" />
       </div>
       <div class="actions">
-        <button class="secondary" id="c-test">Testar API</button>
-        <button class="primary" id="c-save">Salvar</button>
+        <button class="primary" id="c-save" style="flex:1">Salvar</button>
       </div>
-      <div class="status-line" id="c-status"></div>
     `, () => {
       byId('c-save').onclick = () => {
-        state.config.apiBase        = byId('c-api').value.trim();
-        state.config.googleClientId = byId('c-gid').value.trim();
-        state.config.promotora      = byId('c-prom').value.trim() || 'Edna Grace';
-        state.config.loja           = byId('c-loja').value.trim() || 'Savegnago';
-        state.config.metaDia        = Math.max(0, Number(byId('c-metadia').value) || 3);
+        state.config.promotora = byId('c-prom').value.trim() || 'Edna Grace';
+        state.config.loja      = byId('c-loja').value.trim() || 'Savegnago';
+        state.config.metaDia   = Math.max(0, Number(byId('c-metadia').value) || 3);
         save(LS.config, state.config);
+        saveSettingsRemote();          // salva no Neon (compartilhado)
         closeSheet();
         toast('Configurações salvas ✓', 'ok');
-        refreshFromCloud(false);
-        flushQueue(true);
-      };
-      byId('c-test').onclick = async () => {
-        const st = byId('c-status'); st.textContent = 'Testando...';
-        const base = byId('c-api').value.trim().replace(/\/$/, '');
-        try {
-          const res = await fetch(base + '/api/reports'); // sem sessão → 401 esperado
-          if (res.status === 401) { st.textContent = '✓ API acessível (faça login para usar).'; st.style.color = '#1e9e57'; }
-          else if (res.ok) { st.textContent = '✓ API acessível.'; st.style.color = '#1e9e57'; }
-          else { st.textContent = 'Resposta inesperada: HTTP ' + res.status; st.style.color = '#e08a00'; }
-        } catch (e) {
-          st.textContent = '✗ Não alcançou a API: ' + e.message;
-          st.style.color = '#d10a11';
-        }
       };
     });
   }
@@ -967,10 +989,12 @@
   }
 
   /* ---------------- Eventos globais ---------------- */
-  window.addEventListener('online',  () => { render(); flushQueue(false); refreshFromCloud(true); });
+  window.addEventListener('online',  () => { render(); flushSettings(); pullSettings(); flushQueue(false); refreshFromCloud(true); });
   window.addEventListener('offline', () => { render(); });
 
-  function postAuthInit() {
+  async function postAuthInit() {
+    await flushSettings();   // envia mudanças locais pendentes (merge no servidor)
+    await pullSettings();    // baixa a config compartilhada
     refreshFromCloud(true);
     flushQueue(true);
   }

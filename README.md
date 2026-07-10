@@ -61,9 +61,13 @@ https://ednagrace.github.io
 (sem isso o botão de login do Google não aparece).
 
 ### 3) Apontar o app para a API
-Em `app.js`, na constante `defaultConfig`, confirmar `apiBase` com a URL da Vercel do
-passo 1 (ou ajustar em ⚙️ Configurações no próprio app). Depois `git push` (o GitHub
-Pages publica sozinho).
+Em `app.js`, confirmar as constantes de topo `API_BASE` (URL da Vercel do passo 1) e
+`GOOGLE_CLIENT_ID`. São **config fixa do site** (não segredos; iguais para todo navegador,
+nada guardado no aparelho). Depois `git push` (o GitHub Pages publica sozinho).
+
+> As **metas, promotora e loja** ficam no **Neon** (endpoint `/api/settings`), compartilhadas
+> entre aparelhos/logins. Só `API_BASE` e `GOOGLE_CLIENT_ID` são constantes do site, porque
+> são necessários **antes** do login (não dá para buscá-los no banco sem já estar logado).
 
 ### 4) Instalar no celular da Edna
 1. Abrir **https://ednagrace.github.io/** no Chrome do Galaxy A15.
