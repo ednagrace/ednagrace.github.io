@@ -64,6 +64,7 @@
   // Não são segredos (a API só aceita sessão válida de um email da allowlist).
   const API_BASE = 'https://relatorio-api.vercel.app';
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
+  const APP_VERSION = 'v22'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -389,6 +390,7 @@
           <p class="auth-sub">${esc(state.config.promotora)} · ${esc(state.config.loja)}</p>
           <div id="gbtn" class="gbtn-wrap"></div>
           <p class="auth-note">Entre com a conta Google autorizada.<br>Você só faz isso uma vez.</p>
+          <div class="app-version">${APP_VERSION}</div>
         </div>
       </div>`;
     initGis(() => {
@@ -1108,6 +1110,7 @@
         <span>Sair<small>${esc(state.session.email || '')}</small></span>
       </button>
       <div class="status-line" id="cfg-status" style="margin-top:12px"></div>
+      <div class="app-version">Relatório Diário · ${APP_VERSION}</div>
     `, () => {
       byId('mi-config').onclick = () => { closeSheet(); openConfig(); };
       byId('mi-panel').onclick = () => { closeSheet(); openPanel(); };

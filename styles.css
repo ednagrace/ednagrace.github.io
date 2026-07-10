@@ -333,6 +333,7 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
   font-size: 16px; font-weight: 600; width: 100%; background: none; border-left: none; border-right: none; border-top: none; text-align: left;
 }
 .sheet .menu-item .mi-ico { font-size: 22px; }
+.app-version { text-align: center; font-size: 11px; color: var(--muted); margin-top: 14px; letter-spacing: .03em; }
 .sheet .menu-item small { display: block; font-weight: 400; color: var(--muted); font-size: 12.5px; }
 
 /* ---------- Toast ---------- */
