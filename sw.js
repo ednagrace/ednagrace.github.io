@@ -1,6 +1,6 @@
 /* Service Worker — cache do app (funciona offline).
    Troque a versão (v1 -> v2...) sempre que atualizar os arquivos. */
-const CACHE = 'edna-relatorio-v18';
+const CACHE = 'edna-relatorio-v20';
 const ASSETS = [
   './',
   './index.html',

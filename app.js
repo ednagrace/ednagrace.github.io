@@ -739,10 +739,17 @@
       ? { id: state.templates[0].id, title: state.templates[0].title, body: state.templates[0].body }
       : { id: null, title: '', body: '' };
   }
+  function saudacaoAgora() {
+    const h = new Date().getHours();
+    if (h >= 5 && h < 12) return 'Bom dia';
+    if (h >= 12 && h < 18) return 'Boa tarde';
+    return 'Boa noite';
+  }
   function applyPlaceholders(s) {
     const d = new Date();
     const hoje = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
     return String(s || '')
+      .replace(/{saudacao}/gi, saudacaoAgora())
       .replace(/{hoje}/gi, hoje)
       .replace(/{promotora}/gi, state.config.promotora || '')
       .replace(/{loja}/gi, state.config.loja || '');
@@ -750,6 +757,14 @@
 
   function renderMsg() {
     const cur = state.msg;
+    const hojeFmt = (() => { const d = new Date(); return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear(); })();
+    const phTable = `
+      <div class="ph-table">
+        <button type="button" class="ph-row" data-ph="{saudacao}"><code>{saudacao}</code><span>${saudacaoAgora()} <i>(muda com a hora)</i></span></button>
+        <button type="button" class="ph-row" data-ph="{hoje}"><code>{hoje}</code><span>${hojeFmt}</span></button>
+        <button type="button" class="ph-row" data-ph="{promotora}"><code>{promotora}</code><span>${esc(state.config.promotora)}</span></button>
+        <button type="button" class="ph-row" data-ph="{loja}"><code>{loja}</code><span>${esc(state.config.loja)}</span></button>
+      </div>`;
     const options = ['<option value="">— Novo template —</option>']
       .concat(state.templates.map(t =>
         `<option value="${t.id}" ${String(t.id) === String(cur.id) ? 'selected' : ''}>${esc(t.title)}</option>`))
@@ -772,7 +787,8 @@
         <div class="field">
           <label>Mensagem</label>
           <textarea id="tpl-body" rows="8" placeholder="Escreva a mensagem...">${esc(cur.body)}</textarea>
-          <div class="hint-inline">Você pode usar <b>{hoje}</b>, <b>{promotora}</b>, <b>{loja}</b> — são preenchidos ao enviar.</div>
+          <div class="hint-inline">Atalhos (preenchidos ao enviar) — toque para inserir:</div>
+          ${phTable}
         </div>
         <div class="msg-actions">
           ${cur.id ? '<button class="btn-ghost" id="tpl-del">🗑️</button>' : ''}
@@ -790,6 +806,20 @@
     };
     byId('tpl-title').oninput = (e) => { state.msg.title = e.target.value; };
     byId('tpl-body').oninput = (e) => { state.msg.body = e.target.value; };
+    // Atalhos clicáveis: insere o placeholder na posição do cursor
+    Array.from(document.querySelectorAll('.ph-row')).forEach(btn => {
+      btn.onclick = () => {
+        const ta = byId('tpl-body');
+        const ph = btn.getAttribute('data-ph');
+        const s = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
+        const e = ta.selectionEnd != null ? ta.selectionEnd : ta.value.length;
+        ta.value = ta.value.slice(0, s) + ph + ta.value.slice(e);
+        state.msg.body = ta.value;
+        ta.focus();
+        const pos = s + ph.length;
+        ta.setSelectionRange(pos, pos);
+      };
+    });
     byId('tpl-save').onclick = saveTemplate;
     byId('tpl-send').onclick = sendTemplate;
     if (byId('tpl-del')) byId('tpl-del').onclick = deleteTemplate;
