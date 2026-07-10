@@ -699,10 +699,6 @@
   function openMenu() {
     openSheet(`
       <h2>Menu</h2>
-      <button class="menu-item" id="mi-sync">
-        <span class="mi-ico">🔄</span>
-        <span>Sincronizar agora<small>Baixar/enviar relatórios</small></span>
-      </button>
       <button class="menu-item" id="mi-csv">
         <span class="mi-ico">📤</span>
         <span>Exportar CSV (mês)<small>Baixar/compartilhar planilha do mês</small></span>
@@ -722,13 +718,6 @@
       <div class="status-line" id="cfg-status" style="margin-top:12px"></div>
     `, () => {
       byId('mi-config').onclick = () => { closeSheet(); openConfig(); };
-      byId('mi-sync').onclick = async () => {
-        toast('Sincronizando...');
-        await flushQueue(true);
-        await refreshFromCloud(false);
-        toast('Sincronizado ✓', 'ok');
-        closeSheet();
-      };
       byId('mi-csv').onclick = () => { closeSheet(); exportCSV(); };
       byId('mi-share').onclick = () => { closeSheet(); shareToday(); };
       byId('mi-logout').onclick = () => { closeSheet(); logout(); };
@@ -989,8 +978,19 @@
   }
 
   /* ---------------- Eventos globais ---------------- */
-  window.addEventListener('online',  () => { render(); flushSettings(); pullSettings(); flushQueue(false); refreshFromCloud(true); });
+  // Sincroniza tudo: envia pendências e baixa o que há de novo (config + relatórios).
+  function syncNow(silent) {
+    if (!isOnline() || !sessionValid()) return;
+    flushSettings();
+    pullSettings();
+    flushQueue(silent !== false);
+    refreshFromCloud(true);
+  }
+
+  window.addEventListener('online',  () => { render(); syncNow(false); });
   window.addEventListener('offline', () => { render(); });
+  // Ao reabrir/voltar para o app, atualiza sozinho (pega o que outra conta lançou).
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) syncNow(true); });
 
   async function postAuthInit() {
     await flushSettings();   // envia mudanças locais pendentes (merge no servidor)
