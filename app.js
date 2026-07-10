@@ -50,6 +50,7 @@
     metas:   'edna.metas',
     session: 'edna.session',
     settingsPending: 'edna.settingsPending',
+    templates: 'edna.templates',
   };
 
   // Emails autorizados (o back-end também confere — isto é só para a UX).
@@ -83,6 +84,8 @@
     queue:   load(LS.queue, []),          // relatórios aguardando envio (offline)
     metas:   load(LS.metas, {}),          // { 'YYYY-MM': número }
     session: load(LS.session, {}),        // { token, email, name, exp }
+    templates: load(LS.templates, []),    // [{ id, title, body }]
+    msg:     { id: null, title: '', body: '' },
     view:    'list',
     month:   currentMonthKey(),
     search:  '',
@@ -140,6 +143,17 @@
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'Erro ao excluir');
     return data;
+  }
+
+  /* ---------- Templates de mensagem (WhatsApp) ---------- */
+  async function pullTemplates() {
+    if (!API_BASE || !sessionValid() || !isOnline()) return;
+    try {
+      const res = await fetch(apiUrl('/api/templates'), { headers: authHeaders() });
+      if (res.status === 401) { refreshSession(); return; }
+      const data = await res.json();
+      if (data && data.ok) { state.templates = data.templates || []; save(LS.templates, state.templates); }
+    } catch (e) {}
   }
 
   /* ---------- Autenticação Google (login uma vez → sessão de 60 dias) ---------- */
@@ -331,6 +345,7 @@
     if (!sessionValid()) return showLogin();
     if (state.view === 'form') return renderForm();
     if (state.view === 'panel') return renderPanel();
+    if (state.view === 'msg') return renderMsg();
     return renderList();
   }
 
@@ -711,6 +726,120 @@
     else window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
   }
 
+  /* ---------------- TELA: MENSAGENS (templates) ---------------- */
+  function openMsg() {
+    pullTemplates().then(() => { if (state.view === 'msg') selectFirstTemplate(); });
+    selectFirstTemplate();
+    state.view = 'msg';
+    render();
+    window.scrollTo(0, 0);
+  }
+  function selectFirstTemplate() {
+    state.msg = state.templates[0]
+      ? { id: state.templates[0].id, title: state.templates[0].title, body: state.templates[0].body }
+      : { id: null, title: '', body: '' };
+  }
+  function applyPlaceholders(s) {
+    const d = new Date();
+    const hoje = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
+    return String(s || '')
+      .replace(/{hoje}/gi, hoje)
+      .replace(/{promotora}/gi, state.config.promotora || '')
+      .replace(/{loja}/gi, state.config.loja || '');
+  }
+
+  function renderMsg() {
+    const cur = state.msg;
+    const options = ['<option value="">— Novo template —</option>']
+      .concat(state.templates.map(t =>
+        `<option value="${t.id}" ${String(t.id) === String(cur.id) ? 'selected' : ''}>${esc(t.title)}</option>`))
+      .join('');
+
+    app.innerHTML = `
+      <header class="appbar">
+        <button class="iconbtn" id="btn-back" aria-label="Voltar">‹</button>
+        <div style="flex:1"><h1>Mensagens</h1><span class="sub">Templates de WhatsApp</span></div>
+      </header>
+      <div class="screen">
+        <div class="field">
+          <label>Template</label>
+          <select id="tpl-sel">${options}</select>
+        </div>
+        <div class="field">
+          <label>Título</label>
+          <input id="tpl-title" type="text" value="${esc(cur.title)}" placeholder="Ex.: Boas-vindas" />
+        </div>
+        <div class="field">
+          <label>Mensagem</label>
+          <textarea id="tpl-body" rows="8" placeholder="Escreva a mensagem...">${esc(cur.body)}</textarea>
+          <div class="hint-inline">Você pode usar <b>{hoje}</b>, <b>{promotora}</b>, <b>{loja}</b> — são preenchidos ao enviar.</div>
+        </div>
+        <div class="msg-actions">
+          ${cur.id ? '<button class="btn-ghost" id="tpl-del">🗑️</button>' : ''}
+          <button class="btn-ghost" id="tpl-save">💾 Salvar</button>
+          <button class="btn-save" id="tpl-send">📤 Enviar</button>
+        </div>
+      </div>`;
+
+    byId('btn-back').onclick = () => { state.view = 'list'; render(); };
+    byId('tpl-sel').onchange = (e) => {
+      const id = e.target.value;
+      const t = state.templates.find(x => String(x.id) === String(id));
+      state.msg = t ? { id: t.id, title: t.title, body: t.body } : { id: null, title: '', body: '' };
+      render();
+    };
+    byId('tpl-title').oninput = (e) => { state.msg.title = e.target.value; };
+    byId('tpl-body').oninput = (e) => { state.msg.body = e.target.value; };
+    byId('tpl-save').onclick = saveTemplate;
+    byId('tpl-send').onclick = sendTemplate;
+    if (byId('tpl-del')) byId('tpl-del').onclick = deleteTemplate;
+  }
+
+  function sendTemplate() {
+    const txt = applyPlaceholders(state.msg.body);
+    if (!txt.trim()) { toast('Mensagem vazia', 'err'); return; }
+    if (navigator.share) navigator.share({ text: txt }).catch(() => {});
+    else window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
+  }
+
+  async function saveTemplate() {
+    const t = state.msg;
+    if (!t.title.trim()) { toast('Dê um título ao template', 'err'); return; }
+    if (!isOnline() || !sessionValid()) { toast('Conecte à internet para salvar', 'err'); return; }
+    try {
+      const res = await fetch(apiUrl('/api/templates'), {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ template: { id: t.id || undefined, title: t.title, body: t.body } }),
+      });
+      if (res.status === 401) { refreshSession(); toast('Faça login novamente', 'err'); return; }
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'falha');
+      await pullTemplates();
+      state.msg = { id: data.template.id, title: data.template.title, body: data.template.body };
+      render();
+      toast('Template salvo ✓', 'ok');
+    } catch (e) { toast('Erro: ' + e.message, 'err'); }
+  }
+
+  async function deleteTemplate() {
+    const t = state.msg;
+    if (!t.id) { state.msg = { id: null, title: '', body: '' }; render(); return; }
+    if (!window.confirm('Excluir o template “' + t.title + '”?')) return;
+    if (!isOnline() || !sessionValid()) { toast('Conecte à internet para excluir', 'err'); return; }
+    try {
+      const res = await fetch(apiUrl('/api/templates?id=' + encodeURIComponent(t.id)), {
+        method: 'DELETE', headers: authHeaders(),
+      });
+      if (res.status === 401) { refreshSession(); toast('Faça login novamente', 'err'); return; }
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'falha');
+      await pullTemplates();
+      selectFirstTemplate();
+      render();
+      toast('Template excluído', 'ok');
+    } catch (e) { toast('Erro: ' + e.message, 'err'); }
+  }
+
   /* ---------------- TELA: FORMULÁRIO ---------------- */
   function openForm(dataISO) {
     const existing = getReport(dataISO);
@@ -936,6 +1065,10 @@
         <span class="mi-ico">💬</span>
         <span>Compartilhar resumo do dia<small>Enviar por WhatsApp</small></span>
       </button>
+      <button class="menu-item" id="mi-msg">
+        <span class="mi-ico">📝</span>
+        <span>Mensagens<small>Templates de WhatsApp</small></span>
+      </button>
       <button class="menu-item" id="mi-config">
         <span class="mi-ico">🔧</span>
         <span>Configurações<small>Promotora, loja e meta do dia</small></span>
@@ -950,6 +1083,7 @@
       byId('mi-panel').onclick = () => { closeSheet(); openPanel(); };
       byId('mi-sheet').onclick = () => { closeSheet(); generateSheet(); };
       byId('mi-share').onclick = () => { closeSheet(); shareToday(); };
+      byId('mi-msg').onclick = () => { closeSheet(); openMsg(); };
       byId('mi-logout').onclick = () => { closeSheet(); logout(); };
       const st = byId('cfg-status');
       st.textContent = API_BASE ? '✓ Conectado ao servidor' : '⚠ Servidor não configurado';
@@ -1381,6 +1515,7 @@
   async function postAuthInit() {
     await flushSettings();   // envia mudanças locais pendentes (merge no servidor)
     await pullSettings();    // baixa a config compartilhada
+    pullTemplates();         // baixa os templates de mensagem
     refreshFromCloud(true);
     flushQueue(true);
   }

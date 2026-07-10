@@ -241,6 +241,22 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .lg-val { color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
 .wk-sub { font-size: 12px; color: var(--muted); }
 
+/* ---------- Tela de Mensagens (templates) ---------- */
+.screen .field { margin-bottom: 14px; }
+.screen .field label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+.screen .field input, .screen .field select {
+  width: 100%; height: 48px; border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; background: var(--card);
+}
+.screen .field textarea {
+  width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--card); resize: vertical; min-height: 150px;
+}
+.hint-inline { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.hint-inline b { color: var(--red-dark); font-weight: 700; }
+.msg-actions { display: flex; gap: 10px; margin-top: 8px; }
+.msg-actions .btn-ghost { height: 52px; border: 1.5px solid var(--line); border-radius: 14px; background: #fff; color: var(--muted); font-size: 15px; font-weight: 700; padding: 0 16px; }
+.msg-actions .btn-save { flex: 1; height: 52px; border: none; border-radius: 14px; background: var(--red); color: #fff; font-size: 16px; font-weight: 800; }
+.msg-actions .btn-save:active { background: var(--red-dark); }
+
 /* ---------- Botão gerar PDF (dentro do formulário) ---------- */
 .pdf-btn {
   width: 100%; margin-top: 20px; height: 52px; border-radius: 14px;
