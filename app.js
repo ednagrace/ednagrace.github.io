@@ -573,6 +573,30 @@
   /* ---------------- TELA: PAINEL DO MÊS ---------------- */
   function openPanel() { state.view = 'panel'; render(); window.scrollTo(0, 0); }
 
+  // Gráfico donut em SVG (sem biblioteca). segs = [{label, value, color}].
+  function donutSVG(segs, total) {
+    const C = 2 * Math.PI * 45;
+    const active = segs.filter(s => s.value > 0);
+    const gap = total > 0 && active.length > 1 ? 3 : 0;
+    let acc = 0, arcs = '';
+    if (total <= 0) {
+      arcs = '<circle cx="60" cy="60" r="45" fill="none" stroke="#e6e8ec" stroke-width="18"/>';
+    } else {
+      segs.forEach(s => {
+        if (s.value <= 0) return;
+        const segLen = (s.value / total) * C;
+        const dash = Math.max(0.001, segLen - gap);
+        arcs += `<circle cx="60" cy="60" r="45" fill="none" stroke="${s.color}" stroke-width="18" stroke-dasharray="${dash} ${C - dash}" stroke-dashoffset="${-acc}"/>`;
+        acc += segLen;
+      });
+    }
+    return `<svg class="donut" viewBox="0 0 120 120" width="118" height="118" role="img" aria-label="Gráfico de propostas">
+      <g transform="rotate(-90 60 60)">${arcs}</g>
+      <text x="60" y="57" text-anchor="middle" class="donut-num">${total}</text>
+      <text x="60" y="73" text-anchor="middle" class="donut-lbl">propostas</text>
+    </svg>`;
+  }
+
   function renderPanel() {
     const monthKey = state.month;
     const [y, m] = monthKey.split('-').map(Number);
@@ -582,6 +606,21 @@
     const pct = meta > 0 ? Math.min(100, Math.round((feitas / meta) * 100)) : 0;
     const weeks = weeklyBreakdown(monthKey);
     const maxAp = Math.max(1, ...weeks.map(w => w.aprovadas));
+
+    // Gráfico de pizza (donut) — propostas por situação (cores validadas)
+    const propSegs = [
+      { label: 'Aprovadas', value: t.aprovadas, color: '#0ca30c' },
+      { label: 'Reprovadas', value: t.reprovadas, color: '#d03b3b' },
+      { label: 'Em Análise', value: t.analise, color: '#c98500' },
+      { label: 'Pendências', value: t.pendencias, color: '#e0662f' },
+    ];
+    const propTotal = propSegs.reduce((s, x) => s + x.value, 0);
+    const legend = propSegs.map(s => `
+      <div class="lg-row">
+        <span class="lg-dot" style="background:${s.color}"></span>
+        <span class="lg-label">${s.label}</span>
+        <span class="lg-val">${s.value}${propTotal ? ' · ' + Math.round((s.value / propTotal) * 100) + '%' : ''}</span>
+      </div>`).join('');
 
     const tiles = ALL_FIELDS.map(f => `
       <div class="stat-tile">
@@ -629,19 +668,27 @@
           <div class="hint">${t._dias} dia(s) com relatório no mês</div>
         </div>
 
+        <h2 class="panel-h">Propostas do mês</h2>
+        <div class="chart-card">
+          ${donutSVG(propSegs, propTotal)}
+          <div class="legend">${legend}</div>
+        </div>
+
         <h2 class="panel-h">Totais do mês</h2>
         <div class="stat-grid">${tiles}</div>
 
         <h2 class="panel-h">Por semana</h2>
         <div class="weeks">${weeksHTML}</div>
 
-        <button type="button" class="pdf-btn" id="btn-share-month2">💬 Compartilhar resumo do mês</button>
+        <button type="button" class="pdf-btn" id="btn-month-pdf">📄 PDF do resumo do mês</button>
+        <button type="button" class="pdf-btn btn-wpp" id="btn-month-txt">💬 Enviar texto no WhatsApp</button>
       </div>`;
 
     byId('btn-back').onclick = () => { state.view = 'list'; render(); };
     byId('prev-month').onclick = () => shiftMonth(-1);
     byId('next-month').onclick = () => shiftMonth(1);
-    byId('btn-share-month').onclick = byId('btn-share-month2').onclick = () => shareMonth(monthKey);
+    byId('btn-month-pdf').onclick = () => shareMonthPDF(monthKey);
+    byId('btn-month-txt').onclick = byId('btn-share-month').onclick = () => shareMonth(monthKey);
   }
 
   function shareMonth(monthKey) {
@@ -881,9 +928,9 @@
         <span class="mi-ico">📊</span>
         <span>Painel do mês<small>Totais e resumo por semana</small></span>
       </button>
-      <button class="menu-item" id="mi-csv">
-        <span class="mi-ico">📤</span>
-        <span>Exportar CSV (mês)<small>Baixar/compartilhar planilha do mês</small></span>
+      <button class="menu-item" id="mi-sheet">
+        <span class="mi-ico">📗</span>
+        <span>Gerar planilha do Google<small>Salva no Drive e compartilha</small></span>
       </button>
       <button class="menu-item" id="mi-share">
         <span class="mi-ico">💬</span>
@@ -901,7 +948,7 @@
     `, () => {
       byId('mi-config').onclick = () => { closeSheet(); openConfig(); };
       byId('mi-panel').onclick = () => { closeSheet(); openPanel(); };
-      byId('mi-csv').onclick = () => { closeSheet(); exportCSV(); };
+      byId('mi-sheet').onclick = () => { closeSheet(); generateSheet(); };
       byId('mi-share').onclick = () => { closeSheet(); shareToday(); };
       byId('mi-logout').onclick = () => { closeSheet(); logout(); };
       const st = byId('cfg-status');
@@ -943,20 +990,59 @@
   }
 
   /* ---------------- Exportações ---------------- */
-  function exportCSV() {
-    const rows = reportsForView().filter(r => monthKeyOf(r.data) === state.month)
-      .sort((a,b) => a.data.localeCompare(b.data));
-    if (!rows.length) { toast('Nada para exportar neste mês', 'err'); return; }
-    const cols = ['data','promotora','loja','metaMes', ...NUMERIC_KEYS, 'obs'];
-    const header = ['Data','Promotora','Loja','Meta',...ALL_FIELDS.map(f=>f.label),'Obs'];
-    const lines = [header.join(';')];
-    rows.forEach(r => {
-      lines.push(cols.map(c => csvCell(r[c])).join(';'));
+  // Gera/atualiza a planilha do Google no Drive do gerente, copia o link e mostra opções.
+  async function generateSheet() {
+    if (!isOnline() || !sessionValid()) { toast('Conecte à internet', 'err'); return; }
+    toast('Gerando planilha...');
+    try {
+      const res = await fetch(apiUrl('/api/sheet'), {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ month: state.month }),
+      });
+      if (res.status === 401) { refreshSession(); toast('Faça login novamente', 'err'); return; }
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'falha');
+      const copied = await copyToClipboard(data.url);
+      showSheetLink(data.url, copied);
+    } catch (e) {
+      toast('Erro ao gerar planilha: ' + e.message, 'err');
+    }
+  }
+
+  function showSheetLink(url, copied) {
+    openSheet(`
+      <h2>Planilha pronta ✓</h2>
+      <p class="status-line" style="margin:-4px 0 12px">${copied ? '🔗 Link copiado para a área de transferência.' : 'Toque em “Copiar link” abaixo.'}</p>
+      <div class="field">
+        <input id="sheet-url" type="text" readonly value="${esc(url)}" onclick="this.select()" />
+      </div>
+      <div class="actions">
+        <button class="secondary" id="sheet-copy">📋 Copiar link</button>
+        <button class="primary" id="sheet-open">Abrir planilha</button>
+      </div>
+    `, () => {
+      byId('sheet-copy').onclick = async () => {
+        const ok = await copyToClipboard(url);
+        toast(ok ? 'Link copiado ✓' : 'Não foi possível copiar', ok ? 'ok' : 'err');
+      };
+      byId('sheet-open').onclick = () => window.open(url, '_blank');
     });
-    const csv = '﻿' + lines.join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const fname = `relatorios_${state.month}.csv`;
-    downloadOrShare(blob, fname, 'text/csv');
+  }
+
+  async function copyToClipboard(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (e) {}
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    } catch (e) { return false; }
   }
 
   function shareToday() {
@@ -1109,6 +1195,75 @@
     downloadOrShare(blob, fname, 'application/pdf');
   }
 
+  // Monta um PDF (A4) a partir de uma função de desenho — reaproveitado por relatório e resumo.
+  function pdfBuild(draw) {
+    let c = '';
+    const F1 = 'F1', F2 = 'F2';
+    const txt = (x, y, size, font, color, s) => { const [r, g, b] = color; c += `BT /${font} ${size} Tf ${r} ${g} ${b} rg ${x} ${y} Td (${pdfEsc(latin1(s))}) Tj ET\n`; };
+    const rect = (x, y, w, h, color) => { const [r, g, b] = color; c += `${r} ${g} ${b} rg ${x} ${y} ${w} ${h} re f\n`; };
+    const line = (x1, y, x2, color) => { const [r, g, b] = color; c += `${r} ${g} ${b} RG 0.6 w ${x1} ${y} m ${x2} ${y} l S\n`; };
+    draw({ txt, rect, line, F1, F2 });
+    const objs = [
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 4 0 R >>',
+      '<< /Length ' + c.length + ' >>\nstream\n' + c + 'endstream',
+      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
+    ];
+    let pdf = '%PDF-1.4\n';
+    const offsets = [];
+    objs.forEach((o, i) => { offsets.push(pdf.length); pdf += (i + 1) + ' 0 obj\n' + o + '\nendobj\n'; });
+    const xref = pdf.length;
+    pdf += 'xref\n0 ' + (objs.length + 1) + '\n0000000000 65535 f \n';
+    offsets.forEach(off => { pdf += String(off).padStart(10, '0') + ' 00000 n \n'; });
+    pdf += 'trailer\n<< /Size ' + (objs.length + 1) + ' /Root 1 0 R >>\nstartxref\n' + xref + '\n%%EOF';
+    const bytes = new Uint8Array(pdf.length);
+    for (let i = 0; i < pdf.length; i++) bytes[i] = pdf.charCodeAt(i) & 0xff;
+    return new Blob([bytes], { type: 'application/pdf' });
+  }
+
+  function buildMonthPDF(monthKey) {
+    const [y, m] = monthKey.split('-').map(Number);
+    const t = monthTotals(monthKey);
+    const meta = metaFor(monthKey);
+    const pct = meta > 0 ? Math.round((t.aprovadas / meta) * 100) : 0;
+    const weeks = weeklyBreakdown(monthKey);
+    return pdfBuild(({ txt, rect, line, F1, F2 }) => {
+      let yy = 752;
+      rect(0, 792, 595, 50, PDF.RED);
+      txt(40, 814, 19, F2, PDF.WHITE, 'RESUMO DO MÊS');
+      txt(40, 799, 10.5, F1, PDF.WHITE, (state.config.loja || '') + '  ·  ' + (state.config.promotora || ''));
+      txt(40, yy, 10, F1, PDF.MUTED, 'MÊS');
+      txt(40, yy - 17, 15, F2, PDF.INK, MONTHS[m - 1] + ' ' + y + '  —  ' + t._dias + ' dia(s) com relatório');
+      yy -= 46;
+      const section = (title) => { txt(40, yy, 11, F2, PDF.RED, title.toUpperCase()); line(40, yy - 6, 555, PDF.LIGHT); yy -= 24; };
+      const row = (label, value) => { txt(48, yy, 12, F1, PDF.INK, label); txt(360, yy, 13, F2, PDF.INK, String(value)); yy -= 21; };
+      section('Meta');
+      row('Aprovados no mês', t.aprovadas + ' / ' + (meta || '—') + (meta ? '   (' + pct + '%)' : ''));
+      yy -= 6;
+      section('Totais do mês');
+      ALL_FIELDS.forEach(f => row(f.label, t[f.key]));
+      yy -= 6;
+      if (weeks.length) {
+        section('Por semana');
+        weeks.forEach(w => {
+          const d = parseISO(w.week);
+          row('Semana ' + pad(d.getDate()) + '/' + pad(d.getMonth() + 1),
+            w.aprovadas + ' aprov · ' + w.reprovadas + ' reprov · ' + w.dias + ' dia(s)');
+        });
+      }
+      line(40, 54, 555, PDF.LIGHT);
+      let quando = ''; try { quando = new Date().toLocaleString('pt-BR'); } catch (e) {}
+      txt(40, 40, 9, F1, PDF.MUTED, 'Gerado em ' + quando + '  ·  App Relatório Diário');
+    });
+  }
+
+  function shareMonthPDF(monthKey) {
+    const blob = buildMonthPDF(monthKey);
+    downloadOrShare(blob, 'Resumo_' + monthKey + '.pdf', 'application/pdf');
+  }
+
   function downloadOrShare(blob, fname, mime) {
     const file = new File([blob], fname, { type: mime });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -1141,10 +1296,6 @@
   function num(v) { return Number(v) || 0; }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
     ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
-  function csvCell(v) {
-    const s = String(v == null ? '' : v).replace(/"/g, '""');
-    return /[";\n]/.test(s) ? '"' + s + '"' : s;
-  }
   function weekday(d) {
     return ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'][d.getDay()];
   }

@@ -224,7 +224,21 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .wk-head { display: flex; align-items: baseline; justify-content: space-between; font-size: 14px; font-weight: 700; }
 .wk-head b { color: var(--red-dark); }
 .wk-bar { height: 10px; background: #f0f1f4; border-radius: 999px; margin: 8px 0 6px; overflow: hidden; }
-.wk-bar > i { display: block; height: 100%; background: var(--red); border-radius: 999px; }
+.wk-bar > i { display: block; height: 100%; background: #0ca30c; border-radius: 999px; }
+
+/* Gráfico donut + legenda */
+.chart-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+  padding: 16px; box-shadow: var(--shadow); display: flex; align-items: center; gap: 16px;
+}
+.donut { flex: 0 0 auto; }
+.donut-num { font-size: 26px; font-weight: 800; fill: var(--ink); }
+.donut-lbl { font-size: 10px; fill: var(--muted); }
+.legend { flex: 1; display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+.lg-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.lg-dot { width: 12px; height: 12px; border-radius: 3px; flex: 0 0 auto; }
+.lg-label { flex: 1; color: var(--ink); font-weight: 600; }
+.lg-val { color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
 .wk-sub { font-size: 12px; color: var(--muted); }
 
 /* ---------- Botão gerar PDF (dentro do formulário) ---------- */
@@ -234,6 +248,8 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
   font-size: 16px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px;
 }
 .pdf-btn:active { background: #f8d4d4; }
+.pdf-btn.btn-wpp { margin-top: 10px; border-color: var(--green); background: var(--green-soft); color: var(--green); }
+.pdf-btn.btn-wpp:active { background: #cfeeda; }
 
 /* ---------- Botãozinho de PDF no card da lista ---------- */
 .report-card { position: relative; }
