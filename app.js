@@ -1202,7 +1202,26 @@
     const txt = (x, y, size, font, color, s) => { const [r, g, b] = color; c += `BT /${font} ${size} Tf ${r} ${g} ${b} rg ${x} ${y} Td (${pdfEsc(latin1(s))}) Tj ET\n`; };
     const rect = (x, y, w, h, color) => { const [r, g, b] = color; c += `${r} ${g} ${b} rg ${x} ${y} ${w} ${h} re f\n`; };
     const line = (x1, y, x2, color) => { const [r, g, b] = color; c += `${r} ${g} ${b} RG 0.6 w ${x1} ${y} m ${x2} ${y} l S\n`; };
-    draw({ txt, rect, line, F1, F2 });
+    // Setor de pizza preenchido (a0/a1 em radianos, CCW). Aproxima o arco com Béziers.
+    const sector = (cx, cy, R, a0, a1, color) => {
+      const [r, g, b] = color;
+      let s = `${r} ${g} ${b} rg ${cx} ${cy} m ${cx + R * Math.cos(a0)} ${cy + R * Math.sin(a0)} l `;
+      let start = a0;
+      const dir = a1 >= a0 ? 1 : -1;
+      while (Math.abs(a1 - start) > 1e-6) {
+        const step = dir * Math.min(Math.PI / 2, Math.abs(a1 - start));
+        const end = start + step;
+        const k = (4 / 3) * Math.tan(step / 4);
+        const p0x = cx + R * Math.cos(start), p0y = cy + R * Math.sin(start);
+        const c1x = p0x - k * R * Math.sin(start), c1y = p0y + k * R * Math.cos(start);
+        const p1x = cx + R * Math.cos(end), p1y = cy + R * Math.sin(end);
+        const c2x = p1x + k * R * Math.sin(end), c2y = p1y - k * R * Math.cos(end);
+        s += `${c1x} ${c1y} ${c2x} ${c2y} ${p1x} ${p1y} c `;
+        start = end;
+      }
+      c += s + `${cx} ${cy} l f\n`;
+    };
+    draw({ txt, rect, line, sector, F1, F2 });
     const objs = [
       '<< /Type /Catalog /Pages 2 0 R >>',
       '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
@@ -1229,7 +1248,15 @@
     const meta = metaFor(monthKey);
     const pct = meta > 0 ? Math.round((t.aprovadas / meta) * 100) : 0;
     const weeks = weeklyBreakdown(monthKey);
-    return pdfBuild(({ txt, rect, line, F1, F2 }) => {
+    const PIE = [
+      { label: 'Aprovadas', value: t.aprovadas, color: [0.047, 0.639, 0.047] },
+      { label: 'Reprovadas', value: t.reprovadas, color: [0.816, 0.231, 0.231] },
+      { label: 'Em Análise', value: t.analise, color: [0.788, 0.522, 0.000] },
+      { label: 'Pendências', value: t.pendencias, color: [0.878, 0.400, 0.184] },
+    ];
+    const pieTotal = PIE.reduce((s, x) => s + x.value, 0);
+
+    return pdfBuild(({ txt, rect, line, sector, F1, F2 }) => {
       let yy = 752;
       rect(0, 792, 595, 50, PDF.RED);
       txt(40, 814, 19, F2, PDF.WHITE, 'RESUMO DO MÊS');
@@ -1242,6 +1269,31 @@
       section('Meta');
       row('Aprovados no mês', t.aprovadas + ' / ' + (meta || '—') + (meta ? '   (' + pct + '%)' : ''));
       yy -= 6;
+
+      // Gráfico de pizza das propostas + legenda
+      section('Propostas');
+      const cx = 115, cy = yy - 62, R = 56;
+      if (pieTotal <= 0) {
+        sector(cx, cy, R, 0, 2 * Math.PI - 1e-4, [0.90, 0.90, 0.92]);
+      } else {
+        let a = Math.PI / 2; // começa no topo
+        PIE.forEach(s => {
+          if (s.value <= 0) return;
+          const a1 = a + (s.value / pieTotal) * 2 * Math.PI;
+          sector(cx, cy, R, a, a1, s.color);
+          a = a1;
+        });
+      }
+      // legenda à direita
+      let ly = yy - 26;
+      PIE.forEach(s => {
+        rect(220, ly - 8, 11, 11, s.color);
+        txt(238, ly, 12, F1, PDF.INK, s.label);
+        txt(430, ly, 12, F2, PDF.INK, s.value + (pieTotal ? '  (' + Math.round((s.value / pieTotal) * 100) + '%)' : ''));
+        ly -= 26;
+      });
+      yy = cy - R - 18;
+
       section('Totais do mês');
       ALL_FIELDS.forEach(f => row(f.label, t[f.key]));
       yy -= 6;
