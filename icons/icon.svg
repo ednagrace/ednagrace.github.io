@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e21118"/>
+      <stop offset="1" stop-color="#a80009"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#g)"/>
+  <rect x="132" y="96" width="248" height="320" rx="26" fill="#ffffff"/>
+  <rect x="196" y="72" width="120" height="56" rx="20" fill="#ffd3d3"/>
+  <rect x="214" y="86" width="84" height="28" rx="14" fill="#a80009"/>
+  <!-- linhas do checklist -->
+  <g fill="#e21118">
+    <circle cx="176" cy="188" r="15"/>
+    <circle cx="176" cy="256" r="15"/>
+    <circle cx="176" cy="324" r="15"/>
+  </g>
+  <g fill="#1b1d22" opacity="0.85">
+    <rect x="208" y="176" width="140" height="24" rx="12"/>
+    <rect x="208" y="244" width="140" height="24" rx="12"/>
+    <rect x="208" y="312" width="110" height="24" rx="12"/>
+  </g>
+  <!-- check verde -->
+  <path d="M168 182l6 6 12-14" stroke="#fff" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

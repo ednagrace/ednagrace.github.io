@@ -1,0 +1,6 @@
+# Foto interna do relatório (não publicar no site)
+_docs/
+
+# Sistema
+Thumbs.db
+.DS_Store
