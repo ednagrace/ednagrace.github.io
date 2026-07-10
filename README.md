@@ -86,7 +86,7 @@ O app é só HTML/JS estático. Escolha **uma** opção:
    - Enviado? Bolinha 🟢.
 
 **A meta do mês** (padrão 22): toque em **editar** no cartão vermelho e digite.
-O app soma sozinho as aprovadas do mês e mostra `12 / 22` com a barra de progresso.
+O app soma sozinho os aprovados do mês e mostra `12 / 22` com a barra de progresso.
 
 **A meta do dia** (padrão 3): também no cartão vermelho, em *🎯 Meta do dia*.
 No formulário, ao lançar as Aprovadas, aparece na hora se a meta do dia foi batida.

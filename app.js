@@ -229,7 +229,7 @@
       <div class="screen">
         <div class="meta-card">
           <div class="row">
-            <span class="label">Meta do mês · aprovadas</span>
+            <span class="label">Meta do mês · aprovados</span>
             <button class="edit-meta" id="btn-meta">editar</button>
           </div>
           <div class="row" style="margin-top:4px">
@@ -240,7 +240,7 @@
           </div>
           <div class="bar"><i style="width:${pct}%"></i></div>
           <div class="hint">${meta ? (falta > 0 ? `Faltam <b>${falta}</b> para a meta` : 'Meta batida! 🎉') : 'Toque em “editar” para definir a meta do mês'}</div>
-          <div class="hint meta-dia-line">🎯 Meta do dia: <b>${metaDiaVal()}</b> aprovadas <button class="edit-meta" id="btn-meta-dia">editar</button></div>
+          <div class="hint meta-dia-line">🎯 Meta do dia: <b>${metaDiaVal()}</b> aprovados <button class="edit-meta" id="btn-meta-dia">editar</button></div>
         </div>
 
         <div class="month-nav">
@@ -349,14 +349,14 @@
   function editMetaPrompt() {
     const cur = metaFor(state.month) || '';
     const [y, m] = state.month.split('-').map(Number);
-    const v = window.prompt(`Meta de propostas aprovadas para ${MONTHS[m-1]} ${y}:`, cur);
+    const v = window.prompt(`Meta de cartões aprovados para ${MONTHS[m-1]} ${y}:`, cur);
     if (v === null) return;
     setMeta(state.month, v);
     render();
   }
 
   function editMetaDiaPrompt() {
-    const v = window.prompt('Meta de propostas aprovadas por DIA:', metaDiaVal());
+    const v = window.prompt('Meta de cartões aprovados por DIA:', metaDiaVal());
     if (v === null) return;
     state.config.metaDia = Math.max(0, Number(v) || 0);
     save(LS.config, state.config);
@@ -589,7 +589,7 @@
         <input id="c-loja" type="text" value="${esc(c.loja)}" />
       </div>
       <div class="field">
-        <label>Meta do dia (propostas aprovadas)</label>
+        <label>Meta do dia (cartões aprovados)</label>
         <input id="c-metadia" type="number" inputmode="numeric" min="0" value="${esc(c.metaDia != null ? c.metaDia : 3)}" />
       </div>
       <div class="actions">
@@ -659,7 +659,7 @@
     txt += `💳 Cartão — 📦 Entregas: ${num(r.cartaoEntregas)} | 🕓 A receber: ${num(r.cartaoReceber)}\n\n`;
     txt += `*Serviços*\n💬 SMS: ${num(r.sms)}\n🎁 Bônus: ${num(r.bonus)}\n📄 Fatura Digital: ${num(r.faturaDigital)}\n🦷 Odonto Plus: ${num(r.odontoPlus)}\n`;
     if (r.obs) txt += `\n🗒️ Obs: ${r.obs}\n`;
-    if (meta) txt += `\n🎯 Meta do mês: ${feitas}/${meta} aprovadas\n`;
+    if (meta) txt += `\n🎯 Meta do mês: ${feitas}/${meta} aprovados\n`;
 
     if (navigator.share) {
       navigator.share({ title: 'Relatório Diário', text: txt }).catch(()=>{});
@@ -741,8 +741,8 @@
 
     section('Metas');
     const md = metaDiaVal();
-    row('Meta do dia (aprovadas)', num(r.aprovadas) + ' / ' + md + (num(r.aprovadas) >= md ? '   (batida)' : ''));
-    row('Meta do mês (aprovadas)', feitas + ' / ' + (meta || '—') + (meta ? '   (' + pct + '%)' : ''));
+    row('Meta do dia (aprovados)', num(r.aprovadas) + ' / ' + md + (num(r.aprovadas) >= md ? '   (batida)' : ''));
+    row('Meta do mês (aprovados)', feitas + ' / ' + (meta || '—') + (meta ? '   (' + pct + '%)' : ''));
     y -= 6;
 
     // Observações (com quebra simples de linha)
