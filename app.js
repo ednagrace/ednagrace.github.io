@@ -330,7 +330,38 @@
   function render() {
     if (!sessionValid()) return showLogin();
     if (state.view === 'form') return renderForm();
+    if (state.view === 'panel') return renderPanel();
     return renderList();
+  }
+
+  /* ---------- Agregações (painel / resumo) ---------- */
+  function monthReports(monthKey) {
+    return reportsForView().filter(r => monthKeyOf(r.data) === monthKey)
+      .sort((a, b) => a.data.localeCompare(b.data));
+  }
+  function monthTotals(monthKey) {
+    const rows = monthReports(monthKey);
+    const t = {};
+    NUMERIC_KEYS.forEach(k => t[k] = rows.reduce((s, r) => s + (Number(r[k]) || 0), 0));
+    t._dias = rows.length;
+    return t;
+  }
+  function mondayOf(dateISO) {
+    const d = parseISO(dateISO);
+    const dow = (d.getDay() + 6) % 7; // 0 = segunda
+    d.setDate(d.getDate() - dow);
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+  function weeklyBreakdown(monthKey) {
+    const map = {};
+    monthReports(monthKey).forEach(r => {
+      const wk = mondayOf(r.data);
+      if (!map[wk]) map[wk] = { week: wk, aprovadas: 0, reprovadas: 0, dias: 0 };
+      map[wk].aprovadas += Number(r.aprovadas) || 0;
+      map[wk].reprovadas += Number(r.reprovadas) || 0;
+      map[wk].dias += 1;
+    });
+    return Object.values(map).sort((a, b) => a.week.localeCompare(b.week));
   }
 
   /* ---------------- TELAS DE LOGIN ---------------- */
@@ -395,6 +426,7 @@
           <span class="sub">${esc(state.config.promotora)} · ${esc(state.config.loja)}</span>
         </div>
         <span class="net-badge ${isOnline() ? '' : 'off'}">${isOnline() ? 'online' : 'offline'}</span>
+        <button class="iconbtn" id="btn-panel" aria-label="Painel do mês">📊</button>
         <button class="iconbtn" id="btn-menu" aria-label="Menu">⚙️</button>
       </header>
 
@@ -436,10 +468,11 @@
     `;
 
     // Eventos
-    byId('fab-new').onclick = () => openForm(todayISO());
+    byId('fab-new').onclick = () => openNew();
     byId('prev-month').onclick = () => shiftMonth(-1);
     byId('next-month').onclick = () => shiftMonth(1);
     byId('btn-menu').onclick = openMenu;
+    byId('btn-panel').onclick = openPanel;
     byId('btn-meta').onclick = editMetaPrompt;
     byId('btn-meta-dia').onclick = editMetaDiaPrompt;
     const s = byId('search');
@@ -537,10 +570,114 @@
     render();
   }
 
+  /* ---------------- TELA: PAINEL DO MÊS ---------------- */
+  function openPanel() { state.view = 'panel'; render(); window.scrollTo(0, 0); }
+
+  function renderPanel() {
+    const monthKey = state.month;
+    const [y, m] = monthKey.split('-').map(Number);
+    const t = monthTotals(monthKey);
+    const meta = metaFor(monthKey);
+    const feitas = t.aprovadas;
+    const pct = meta > 0 ? Math.min(100, Math.round((feitas / meta) * 100)) : 0;
+    const weeks = weeklyBreakdown(monthKey);
+    const maxAp = Math.max(1, ...weeks.map(w => w.aprovadas));
+
+    const tiles = ALL_FIELDS.map(f => `
+      <div class="stat-tile">
+        <div class="st-emoji">${f.emoji}</div>
+        <div class="st-num">${t[f.key]}</div>
+        <div class="st-label">${f.label}</div>
+      </div>`).join('');
+
+    const weeksHTML = weeks.length ? weeks.map(w => {
+      const d = parseISO(w.week);
+      const end = new Date(d); end.setDate(d.getDate() + 6);
+      const label = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + ' – ' + pad(end.getDate()) + '/' + pad(end.getMonth() + 1);
+      return `
+        <div class="week-row">
+          <div class="wk-head"><span>Semana ${label}</span><b>${w.aprovadas} aprov.</b></div>
+          <div class="wk-bar"><i style="width:${Math.round((w.aprovadas / maxAp) * 100)}%"></i></div>
+          <div class="wk-sub">${w.dias} dia(s) · ❌ ${w.reprovadas} reprov.</div>
+        </div>`;
+    }).join('') : '<div class="empty"><p>Sem relatórios neste mês.</p></div>';
+
+    app.innerHTML = `
+      <header class="appbar">
+        <button class="iconbtn" id="btn-back" aria-label="Voltar">‹</button>
+        <div style="flex:1">
+          <h1>Painel do mês</h1>
+          <span class="sub">${esc(state.config.promotora)} · ${esc(state.config.loja)}</span>
+        </div>
+        <button class="iconbtn" id="btn-share-month" aria-label="Compartilhar">📤</button>
+      </header>
+
+      <div class="screen">
+        <div class="month-nav">
+          <button id="prev-month" aria-label="Mês anterior">‹</button>
+          <div class="label">${MONTHS[m-1]} ${y}</div>
+          <button id="next-month" aria-label="Próximo mês">›</button>
+        </div>
+
+        <div class="meta-card">
+          <div class="row"><span class="label">Meta do mês · aprovados</span></div>
+          <div class="row" style="margin-top:4px">
+            <div class="big">${feitas}<small> / ${meta || '—'}</small></div>
+            <div style="text-align:right;font-size:22px;font-weight:800">${meta ? pct + '%' : ''}</div>
+          </div>
+          <div class="bar"><i style="width:${pct}%"></i></div>
+          <div class="hint">${t._dias} dia(s) com relatório no mês</div>
+        </div>
+
+        <h2 class="panel-h">Totais do mês</h2>
+        <div class="stat-grid">${tiles}</div>
+
+        <h2 class="panel-h">Por semana</h2>
+        <div class="weeks">${weeksHTML}</div>
+
+        <button type="button" class="pdf-btn" id="btn-share-month2">💬 Compartilhar resumo do mês</button>
+      </div>`;
+
+    byId('btn-back').onclick = () => { state.view = 'list'; render(); };
+    byId('prev-month').onclick = () => shiftMonth(-1);
+    byId('next-month').onclick = () => shiftMonth(1);
+    byId('btn-share-month').onclick = byId('btn-share-month2').onclick = () => shareMonth(monthKey);
+  }
+
+  function shareMonth(monthKey) {
+    const [y, m] = monthKey.split('-').map(Number);
+    const t = monthTotals(monthKey);
+    const meta = metaFor(monthKey);
+    const weeks = weeklyBreakdown(monthKey);
+    let txt = `📊 *Resumo do mês — ${MONTHS[m-1]} ${y}*\n`;
+    txt += `🏪 ${state.config.loja} · 👤 ${state.config.promotora}\n`;
+    txt += `📅 ${t._dias} dia(s) com relatório\n\n`;
+    txt += `*Propostas*\n✅ Aprovadas: ${t.aprovadas}\n❌ Reprovadas: ${t.reprovadas}\n🔍 Em análise: ${t.analise}\n⏳ Pendências: ${t.pendencias}\n\n`;
+    txt += `🔗 Links: ${t.link}\n💳 Cartão — 📦 ${t.cartaoEntregas} entregas · 🕓 ${t.cartaoReceber} a receber\n\n`;
+    txt += `*Serviços*\n💬 SMS: ${t.sms}\n🎁 Bônus: ${t.bonus}\n📄 Fatura Digital: ${t.faturaDigital}\n🦷 Odonto Plus: ${t.odontoPlus}\n`;
+    if (meta) txt += `\n🎯 Meta: ${t.aprovadas}/${meta} aprovados (${Math.round((t.aprovadas / meta) * 100)}%)\n`;
+    if (weeks.length) {
+      txt += `\n*Aprovadas por semana*\n`;
+      weeks.forEach(w => { const d = parseISO(w.week); txt += `• Semana ${pad(d.getDate())}/${pad(d.getMonth() + 1)}: ${w.aprovadas}\n`; });
+    }
+    if (navigator.share) navigator.share({ title: 'Resumo do mês', text: txt }).catch(() => {});
+    else window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
+  }
+
   /* ---------------- TELA: FORMULÁRIO ---------------- */
   function openForm(dataISO) {
     const existing = getReport(dataISO);
     state.editing = existing || blankReport(dataISO);
+    state.editingNew = !existing;
+    state.view = 'form';
+    render();
+    window.scrollTo(0, 0);
+  }
+
+  // Sempre começa em branco (zerado), título "Novo".
+  function openNew() {
+    state.editing = blankReport(todayISO());
+    state.editingNew = true;
     state.view = 'form';
     render();
     window.scrollTo(0, 0);
@@ -570,10 +707,10 @@
       <header class="appbar">
         <button class="iconbtn" id="btn-back" aria-label="Voltar">‹</button>
         <div style="flex:1">
-          <h1>${getReport(r.data) ? 'Editar' : 'Novo'} Relatório</h1>
+          <h1>${state.editingNew ? 'Novo' : 'Editar'} Relatório</h1>
           <span class="sub">${esc(state.config.promotora)} · ${esc(state.config.loja)}</span>
         </div>
-        ${getReport(r.data) ? '<button class="iconbtn" id="btn-del" aria-label="Excluir">🗑️</button>' : ''}
+        ${!state.editingNew ? '<button class="iconbtn" id="btn-del" aria-label="Excluir">🗑️</button>' : ''}
       </header>
 
       <div class="screen">
@@ -692,6 +829,11 @@
   async function onSave() {
     const r = state.editing;
     if (!r.data) { toast('Escolha a data', 'err'); return; }
+    // Novo relatório para um dia que já existe → confirma antes de substituir.
+    if (state.editingNew && getReport(r.data)) {
+      const dd = parseISO(r.data);
+      if (!window.confirm('Já existe um relatório para ' + pad(dd.getDate()) + '/' + pad(dd.getMonth() + 1) + '/' + dd.getFullYear() + '.\nSubstituir?')) return;
+    }
     r.promotora = state.config.promotora;
     r.loja = state.config.loja;
     r.metaMes = metaFor(monthKeyOf(r.data));
@@ -735,6 +877,10 @@
   function openMenu() {
     openSheet(`
       <h2>Menu</h2>
+      <button class="menu-item" id="mi-panel">
+        <span class="mi-ico">📊</span>
+        <span>Painel do mês<small>Totais e resumo por semana</small></span>
+      </button>
       <button class="menu-item" id="mi-csv">
         <span class="mi-ico">📤</span>
         <span>Exportar CSV (mês)<small>Baixar/compartilhar planilha do mês</small></span>
@@ -754,6 +900,7 @@
       <div class="status-line" id="cfg-status" style="margin-top:12px"></div>
     `, () => {
       byId('mi-config').onclick = () => { closeSheet(); openConfig(); };
+      byId('mi-panel').onclick = () => { closeSheet(); openPanel(); };
       byId('mi-csv').onclick = () => { closeSheet(); exportCSV(); };
       byId('mi-share').onclick = () => { closeSheet(); shareToday(); };
       byId('mi-logout').onclick = () => { closeSheet(); logout(); };
