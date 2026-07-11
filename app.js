@@ -64,7 +64,7 @@
   // Não são segredos (a API só aceita sessão válida de um email da allowlist).
   const API_BASE = 'https://relatorio-api.vercel.app';
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v26'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v27'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -1259,6 +1259,14 @@
     });
   }
 
+  // Abre o WhatsApp do suporte já com uma mensagem inicial.
+  const SUPORTE_WPP = '5519999974213'; // 55 (BR) + 19 99997-4213
+  function openSuporteWhatsApp() {
+    const txt = 'Olá! Sou ' + (state.config.promotora || '') + ' (' + (state.config.loja || '') +
+                '). Preciso de ajuda com o app Relatório Diário (' + APP_VERSION + ').';
+    window.open('https://wa.me/' + SUPORTE_WPP + '?text=' + encodeURIComponent(txt), '_blank');
+  }
+
   function openConfig() {
     const c = state.config;
     openSheet(`
@@ -1279,7 +1287,9 @@
       <div class="actions">
         <button class="primary" id="c-save" style="flex:1">Salvar</button>
       </div>
+      <button type="button" class="pdf-btn btn-wpp" id="c-suporte" style="margin-top:16px">💬 Falar no WhatsApp (suporte)</button>
     `, () => {
+      byId('c-suporte').onclick = () => openSuporteWhatsApp();
       byId('c-save').onclick = () => {
         state.config.promotora = byId('c-prom').value.trim() || 'Edna Grace';
         state.config.loja      = byId('c-loja').value.trim() || 'Savegnago';
