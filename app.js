@@ -64,7 +64,7 @@
   // Não são segredos (a API só aceita sessão válida de um email da allowlist).
   const API_BASE = 'https://relatorio-api.vercel.app';
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v24'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v25'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -1098,9 +1098,24 @@
     }
   }
 
+  /* Botões rápidos: sempre 3 linhas COMPLETAS. Quantas colunas cabem depende da tela —
+     no celular dão 5 (0-4 / 5-9 / 10-14); em telas maiores entram mais retângulos,
+     mantendo a mesma largura mínima. */
+  const QUICK_MIN_W = 52;   // largura mínima do retângulo (px)
+  const QUICK_GAP = 7;      // gap da grade (px)
+  const QUICK_ROWS = 3;
+  function quickCols() {
+    const appW = Math.min(window.innerWidth || 360, 640); // #app tem max-width 640
+    const inner = Math.max(240, appW - 58);               // paddings da tela + do card
+    const cols = Math.floor((inner + QUICK_GAP) / (QUICK_MIN_W + QUICK_GAP));
+    return Math.max(5, Math.min(10, cols));
+  }
+
   function counterHTML(f, val) {
+    const cols = quickCols();
+    const maxN = cols * QUICK_ROWS - 1;   // ex.: 5 colunas → 0..14
     const quick = [];
-    for (let n = 0; n <= 15; n++) {
+    for (let n = 0; n <= maxN; n++) {
       quick.push(`<button type="button" data-q="${f.key}" data-n="${n}" class="${Number(val) === n ? 'active' : ''}">${n}</button>`);
     }
     return `
@@ -1113,7 +1128,7 @@
             <button type="button" class="plus" data-step="${f.key}" data-d="1">＋</button>
           </div>
         </div>
-        <div class="quick">${quick.join('')}</div>
+        <div class="quick" style="grid-template-columns: repeat(${cols}, 1fr)">${quick.join('')}</div>
         ${f.dailyMeta ? `<div class="daily-hint ${Number(val) >= metaDiaVal() ? 'hit' : ''}" id="dhint-${f.key}">${dailyHintText(val)}</div>` : ''}
       </div>`;
   }
@@ -1659,6 +1674,16 @@
 
   window.addEventListener('online',  () => { render(); syncNow(false); });
   window.addEventListener('offline', () => { render(); });
+
+  // Se a largura mudar (girar a tela), recalcula as colunas dos botões rápidos.
+  let lastQuickCols = quickCols();
+  window.addEventListener('resize', () => {
+    const c = quickCols();
+    if (c !== lastQuickCols) {
+      lastQuickCols = c;
+      if (state.view === 'form') render();
+    }
+  });
   // Ao reabrir/voltar para o app, atualiza sozinho (pega o que outra conta lançou).
   document.addEventListener('visibilitychange', () => { if (!document.hidden) syncNow(true); });
 
