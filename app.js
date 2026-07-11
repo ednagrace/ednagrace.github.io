@@ -64,7 +64,7 @@
   // Não são segredos (a API só aceita sessão válida de um email da allowlist).
   const API_BASE = 'https://relatorio-api.vercel.app';
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v23'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v24'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -498,25 +498,54 @@
     wireCards();
   }
 
-  // Liga os cliques dos cards: abrir relatório, botãozinho de PDF e swipe para excluir
-  let openSwipeWrap = null;
-  function closeSwipe(wrap) {
-    if (!wrap) return;
-    const card = wrap.querySelector('.report-card');
-    if (card) { card.style.transition = 'transform .18s ease'; card.style.transform = 'translateX(0)'; }
-    wrap.classList.remove('open');
-    if (openSwipeWrap === wrap) openSwipeWrap = null;
+  /* Swipe para excluir (estilo iOS): passou de 50% da largura → solta e o item
+     voa para fora e é excluído. Até 50% → volta ao repouso. O gesto É a confirmação. */
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+  async function swipeDelete(wrap, card, dir) {
+    const dataISO = card.getAttribute('data-open');
+    const w = wrap.offsetWidth;
+    const h = wrap.offsetHeight;
+
+    // Sem internet não dá para excluir: volta ao repouso.
+    if (!isOnline() || !sessionValid()) {
+      card.style.transition = 'transform .18s ease';
+      card.style.transform = 'translateX(0)';
+      wrap.classList.remove('will-delete');
+      toast('Conecte à internet para excluir', 'err');
+      return;
+    }
+
+    // 1) a lixeira cresce e "empurra" o item para fora da lista
+    wrap.style.setProperty('--push', (dir * 26) + 'px');
+    wrap.classList.add('committing');
+    card.style.transition = 'transform .22s cubic-bezier(.4,0,1,1)';
+    card.style.transform = 'translateX(' + (dir * (w + 60)) + 'px)';
+    await sleep(220);
+
+    // 2) a linha colapsa (some da lista)
+    wrap.style.height = h + 'px';
+    wrap.style.overflow = 'hidden';
+    void wrap.offsetHeight; // força reflow
+    wrap.style.transition = 'height .18s ease, opacity .18s ease, margin-bottom .18s ease';
+    wrap.style.height = '0px';
+    wrap.style.opacity = '0';
+    wrap.style.marginBottom = '-10px'; // compensa o gap da lista
+    await sleep(190);
+
+    // 3) exclui de fato (se falhar, o render devolve o item)
+    const ok = await deleteReportNow(dataISO);
+    render();
+    toast(ok ? 'Relatório excluído' : 'Não foi possível excluir', ok ? 'ok' : 'err');
   }
 
   function wireSwipe(wrap) {
     const card = wrap.querySelector('.report-card');
     if (!card) return;
     let startX = 0, startY = 0, dx = 0, dragging = false, decided = false, horiz = false;
-    const OPEN = 84;
 
     card.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('.card-pdf')) return;      // não arrasta pelo botão de PDF
-      if (openSwipeWrap && openSwipeWrap !== wrap) closeSwipe(openSwipeWrap);
+      if (e.target.closest('.card-pdf')) return; // não arrasta pelo botão de PDF
       startX = e.clientX; startY = e.clientY;
       dx = 0; dragging = true; decided = false; horiz = false;
       card.style.transition = 'none';
@@ -532,24 +561,25 @@
         if (horiz) { try { card.setPointerCapture(e.pointerId); } catch (err) {} }
       }
       if (!horiz) return;
-      dx = mx;
-      card.style.transform = 'translateX(' + Math.max(-120, Math.min(120, dx)) + 'px)';
+      const w = wrap.offsetWidth;
+      dx = Math.max(-w, Math.min(w, mx));
+      card.style.transform = 'translateX(' + dx + 'px)';
+      // passou de 50% → a lixeira cresce avisando que ao soltar vai excluir
+      wrap.classList.toggle('will-delete', Math.abs(dx) > w / 2);
     });
 
     const finish = () => {
       if (!dragging) return;
       dragging = false;
-      card.style.transition = 'transform .18s ease';
-      if (horiz && Math.abs(dx) > 60) {
-        card.style.transform = 'translateX(' + (dx < 0 ? -OPEN : OPEN) + 'px)';
-        wrap.classList.add('open');
-        openSwipeWrap = wrap;
-      } else {
+      const w = wrap.offsetWidth;
+      if (horiz && Math.abs(dx) > w / 2) {          // > 50% → exclui
+        swipeDelete(wrap, card, dx < 0 ? -1 : 1);
+      } else {                                      // ≤ 50% → volta ao repouso
+        card.style.transition = 'transform .18s ease';
         card.style.transform = 'translateX(0)';
-        wrap.classList.remove('open');
-        if (openSwipeWrap === wrap) openSwipeWrap = null;
+        wrap.classList.remove('will-delete');
       }
-      if (horiz && Math.abs(dx) > 8) {         // impede que o arraste vire clique
+      if (horiz && Math.abs(dx) > 8) {              // impede que o arraste vire clique
         card.dataset.swiped = '1';
         setTimeout(() => { delete card.dataset.swiped; }, 250);
       }
@@ -559,8 +589,6 @@
   }
 
   function wireCards() {
-    openSwipeWrap = null;
-
     Array.from(document.querySelectorAll('[data-pdf]')).forEach(btn => {
       btn.onclick = (e) => {
         e.stopPropagation();
@@ -571,21 +599,8 @@
 
     Array.from(document.querySelectorAll('[data-open]')).forEach(el => {
       el.onclick = () => {
-        if (el.dataset.swiped === '1') return;                     // acabou de arrastar
-        const wrap = el.closest('.card-wrap');
-        if (wrap && wrap.classList.contains('open')) { closeSwipe(wrap); return; } // fecha o swipe
+        if (el.dataset.swiped === '1') return; // acabou de arrastar
         openForm(el.getAttribute('data-open'));
-      };
-    });
-
-    // Faixa vermelha (lixeira) revelada pelo swipe
-    Array.from(document.querySelectorAll('[data-del]')).forEach(bg => {
-      bg.onclick = async () => {
-        const dataISO = bg.getAttribute('data-del');
-        const wrap = bg.closest('.card-wrap');
-        const ok = await deleteReportByDate(dataISO);
-        if (ok) { openSwipeWrap = null; render(); toast('Relatório excluído', 'ok'); }
-        else { closeSwipe(wrap); }
       };
     });
 
@@ -1042,13 +1057,8 @@
     ALL_FIELDS.forEach(f => wireCounter(f, r));
   }
 
-  // Exclusão com confirmação — usada pelo botão do formulário e pelo swipe da lista.
-  async function deleteReportByDate(dataISO) {
-    if (!getReport(dataISO)) return false;
-    const d = parseISO(dataISO);
-    const quando = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
-    if (!window.confirm('Excluir o relatório de ' + quando + '?\n\nEsta ação não pode ser desfeita.')) return false;
-    if (!isOnline() || !sessionValid()) { toast('Conecte à internet para excluir', 'err'); return false; }
+  // Exclui de fato (sem perguntar). Usado pelo swipe — o gesto já é a confirmação.
+  async function deleteReportNow(dataISO) {
     try {
       await apiDelete(dataISO);
       state.reports = state.reports.filter(x => x.data !== dataISO);
@@ -1057,9 +1067,20 @@
       save(LS.queue, state.queue);
       return true;
     } catch (e) {
-      toast('Não foi possível excluir: ' + e.message, 'err');
       return false;
     }
+  }
+
+  // Exclusão COM confirmação — usada pelo botão 🗑️ do formulário.
+  async function deleteReportByDate(dataISO) {
+    if (!getReport(dataISO)) return false;
+    const d = parseISO(dataISO);
+    const quando = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
+    if (!window.confirm('Excluir o relatório de ' + quando + '?\n\nEsta ação não pode ser desfeita.')) return false;
+    if (!isOnline() || !sessionValid()) { toast('Conecte à internet para excluir', 'err'); return false; }
+    const ok = await deleteReportNow(dataISO);
+    if (!ok) toast('Não foi possível excluir', 'err');
+    return ok;
   }
 
   async function onDelete() {

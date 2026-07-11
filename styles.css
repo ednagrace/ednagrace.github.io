@@ -123,8 +123,17 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
   position: absolute; inset: 0; background: var(--red); color: #fff;
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 24px; font-size: 23px;
+  transition: background .15s ease;
 }
-.swipe-bg:active { background: var(--red-dark); }
+.swipe-bg span { transition: transform .18s cubic-bezier(.2,.8,.3,1); will-change: transform; }
+
+/* passou de 50%: a lixeira cresce avisando que ao soltar exclui */
+.card-wrap.will-delete .swipe-bg { background: var(--red-dark); }
+.card-wrap.will-delete .swipe-bg span { transform: scale(1.4); }
+
+/* soltou: a lixeira avança e "empurra" o item para fora */
+.card-wrap.committing .swipe-bg { background: var(--red-dark); }
+.card-wrap.committing .swipe-bg span { transform: translateX(var(--push, 0)) scale(1.7); }
 
 .report-card {
   background: var(--card); border-radius: var(--radius); padding: 14px 16px;
