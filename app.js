@@ -64,7 +64,7 @@
   // Não são segredos (a API só aceita sessão válida de um email da allowlist).
   const API_BASE = 'https://relatorio-api.vercel.app';
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v25'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v26'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -1101,11 +1101,15 @@
   /* Botões rápidos: sempre 3 linhas COMPLETAS. Quantas colunas cabem depende da tela —
      no celular dão 5 (0-4 / 5-9 / 10-14); em telas maiores entram mais retângulos,
      mantendo a mesma largura mínima. */
-  const QUICK_MIN_W = 52;   // largura mínima do retângulo (px)
+  const QUICK_MIN_W = 58;   // largura mínima do retângulo em telas grandes (px)
   const QUICK_GAP = 7;      // gap da grade (px)
   const QUICK_ROWS = 3;
+  const PHONE_MAX = 600;    // até aqui é "celular"
   function quickCols() {
     const appW = Math.min(window.innerWidth || 360, 640); // #app tem max-width 640
+    // Celular: sempre 5 colunas → 0-4 / 5-9 / 10-14 (retângulos mais largos)
+    if (appW < PHONE_MAX) return 5;
+    // Telas maiores: cabe mais retângulo, mantendo a mesma largura mínima
     const inner = Math.max(240, appW - 58);               // paddings da tela + do card
     const cols = Math.floor((inner + QUICK_GAP) / (QUICK_MIN_W + QUICK_GAP));
     return Math.max(5, Math.min(10, cols));
