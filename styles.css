@@ -113,10 +113,24 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 
 /* ---------- Lista de relatórios ---------- */
 .list { display: flex; flex-direction: column; gap: 10px; }
+
+/* Swipe para excluir: faixa vermelha atrás do card */
+.card-wrap {
+  position: relative; border-radius: var(--radius); overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.swipe-bg {
+  position: absolute; inset: 0; background: var(--red); color: #fff;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; font-size: 23px;
+}
+.swipe-bg:active { background: var(--red-dark); }
+
 .report-card {
   background: var(--card); border-radius: var(--radius); padding: 14px 16px;
-  box-shadow: var(--shadow); border: 1px solid var(--line);
+  border: 1px solid var(--line);
   display: flex; align-items: center; gap: 14px;
+  touch-action: pan-y; will-change: transform; user-select: none;
 }
 .report-card:active { background: #fafafa; }
 .report-card .date-badge {

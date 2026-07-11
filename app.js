@@ -64,7 +64,7 @@
   // Não são segredos (a API só aceita sessão válida de um email da allowlist).
   const API_BASE = 'https://relatorio-api.vercel.app';
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v22'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v23'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -498,8 +498,69 @@
     wireCards();
   }
 
-  // Liga os cliques dos cards: abrir relatório + botãozinho de PDF
+  // Liga os cliques dos cards: abrir relatório, botãozinho de PDF e swipe para excluir
+  let openSwipeWrap = null;
+  function closeSwipe(wrap) {
+    if (!wrap) return;
+    const card = wrap.querySelector('.report-card');
+    if (card) { card.style.transition = 'transform .18s ease'; card.style.transform = 'translateX(0)'; }
+    wrap.classList.remove('open');
+    if (openSwipeWrap === wrap) openSwipeWrap = null;
+  }
+
+  function wireSwipe(wrap) {
+    const card = wrap.querySelector('.report-card');
+    if (!card) return;
+    let startX = 0, startY = 0, dx = 0, dragging = false, decided = false, horiz = false;
+    const OPEN = 84;
+
+    card.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('.card-pdf')) return;      // não arrasta pelo botão de PDF
+      if (openSwipeWrap && openSwipeWrap !== wrap) closeSwipe(openSwipeWrap);
+      startX = e.clientX; startY = e.clientY;
+      dx = 0; dragging = true; decided = false; horiz = false;
+      card.style.transition = 'none';
+    });
+
+    card.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const mx = e.clientX - startX, my = e.clientY - startY;
+      if (!decided) {
+        if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+        decided = true;
+        horiz = Math.abs(mx) > Math.abs(my);
+        if (horiz) { try { card.setPointerCapture(e.pointerId); } catch (err) {} }
+      }
+      if (!horiz) return;
+      dx = mx;
+      card.style.transform = 'translateX(' + Math.max(-120, Math.min(120, dx)) + 'px)';
+    });
+
+    const finish = () => {
+      if (!dragging) return;
+      dragging = false;
+      card.style.transition = 'transform .18s ease';
+      if (horiz && Math.abs(dx) > 60) {
+        card.style.transform = 'translateX(' + (dx < 0 ? -OPEN : OPEN) + 'px)';
+        wrap.classList.add('open');
+        openSwipeWrap = wrap;
+      } else {
+        card.style.transform = 'translateX(0)';
+        wrap.classList.remove('open');
+        if (openSwipeWrap === wrap) openSwipeWrap = null;
+      }
+      if (horiz && Math.abs(dx) > 8) {         // impede que o arraste vire clique
+        card.dataset.swiped = '1';
+        setTimeout(() => { delete card.dataset.swiped; }, 250);
+      }
+    };
+    card.addEventListener('pointerup', finish);
+    card.addEventListener('pointercancel', finish);
+  }
+
   function wireCards() {
+    openSwipeWrap = null;
+
     Array.from(document.querySelectorAll('[data-pdf]')).forEach(btn => {
       btn.onclick = (e) => {
         e.stopPropagation();
@@ -507,9 +568,28 @@
         sharePDF(rep ? Object.assign({}, rep) : null);
       };
     });
+
     Array.from(document.querySelectorAll('[data-open]')).forEach(el => {
-      el.onclick = () => openForm(el.getAttribute('data-open'));
+      el.onclick = () => {
+        if (el.dataset.swiped === '1') return;                     // acabou de arrastar
+        const wrap = el.closest('.card-wrap');
+        if (wrap && wrap.classList.contains('open')) { closeSwipe(wrap); return; } // fecha o swipe
+        openForm(el.getAttribute('data-open'));
+      };
     });
+
+    // Faixa vermelha (lixeira) revelada pelo swipe
+    Array.from(document.querySelectorAll('[data-del]')).forEach(bg => {
+      bg.onclick = async () => {
+        const dataISO = bg.getAttribute('data-del');
+        const wrap = bg.closest('.card-wrap');
+        const ok = await deleteReportByDate(dataISO);
+        if (ok) { openSwipeWrap = null; render(); toast('Relatório excluído', 'ok'); }
+        else { closeSwipe(wrap); }
+      };
+    });
+
+    Array.from(document.querySelectorAll('.card-wrap')).forEach(wireSwipe);
   }
 
   // Re-render só da lista (mantém foco no campo de busca)
@@ -539,6 +619,10 @@
     const servicos = num(r.sms)+num(r.bonus)+num(r.faturaDigital)+num(r.odontoPlus);
     if (servicos) chips.push(`<span class="chip">⭐ ${servicos}</span>`);
     return `
+      <div class="card-wrap">
+        <div class="swipe-bg" data-del="${r.data}" title="Excluir">
+          <span>🗑️</span><span>🗑️</span>
+        </div>
       <div class="report-card" data-open="${r.data}">
         <div class="date-badge">
           <div class="d">${pad(d.getDate())}</div>
@@ -552,6 +636,7 @@
         </div>
         <button class="card-pdf" data-pdf="${r.data}" title="Gerar PDF" aria-label="Gerar PDF">📄</button>
         <div class="go">›</div>
+      </div>
       </div>`;
   }
 
@@ -957,27 +1042,38 @@
     ALL_FIELDS.forEach(f => wireCounter(f, r));
   }
 
+  // Exclusão com confirmação — usada pelo botão do formulário e pelo swipe da lista.
+  async function deleteReportByDate(dataISO) {
+    if (!getReport(dataISO)) return false;
+    const d = parseISO(dataISO);
+    const quando = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
+    if (!window.confirm('Excluir o relatório de ' + quando + '?\n\nEsta ação não pode ser desfeita.')) return false;
+    if (!isOnline() || !sessionValid()) { toast('Conecte à internet para excluir', 'err'); return false; }
+    try {
+      await apiDelete(dataISO);
+      state.reports = state.reports.filter(x => x.data !== dataISO);
+      state.queue = state.queue.filter(x => x.data !== dataISO);
+      save(LS.reports, state.reports);
+      save(LS.queue, state.queue);
+      return true;
+    } catch (e) {
+      toast('Não foi possível excluir: ' + e.message, 'err');
+      return false;
+    }
+  }
+
   async function onDelete() {
     const r = state.editing;
     if (!getReport(r.data)) { state.view = 'list'; render(); return; }
-    const d = parseISO(r.data);
-    const quando = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
-    if (!window.confirm('Excluir o relatório de ' + quando + '?\n\nEsta ação não pode ser desfeita.')) return;
-    if (!isOnline() || !sessionValid()) { toast('Conecte à internet para excluir', 'err'); return; }
     const btn = byId('btn-del');
     if (btn) btn.disabled = true;
-    try {
-      await apiDelete(r.data);
-      state.reports = state.reports.filter(x => x.data !== r.data);
-      state.queue = state.queue.filter(x => x.data !== r.data);
-      save(LS.reports, state.reports);
-      save(LS.queue, state.queue);
+    const ok = await deleteReportByDate(r.data);
+    if (ok) {
       state.view = 'list';
       render();
       toast('Relatório excluído', 'ok');
-    } catch (e) {
-      if (btn) btn.disabled = false;
-      toast('Não foi possível excluir: ' + e.message, 'err');
+    } else if (btn) {
+      btn.disabled = false;
     }
   }
 
