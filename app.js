@@ -65,7 +65,7 @@
   // Não são segredos (a API só aceita sessão válida de um email da allowlist).
   const API_BASE = 'https://relatorio-api.vercel.app';
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v29'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v30'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -179,18 +179,47 @@
     return !!(navigator.contacts && navigator.contacts.select && window.ContactsManager);
   }
   function vcardDe(c) {
-    const nome = (c.name || '').trim();
+    // FN é obrigatório no vCard 3.0 — sem ele o Android recusa o cartão.
+    // Se não houver nome, usa o telefone (ou e-mail) como identificação.
+    const nome = (c.name || '').trim() || (c.phone || '').trim() || (c.email || '').trim() || 'Contato';
     const l = ['BEGIN:VCARD', 'VERSION:3.0'];
-    if (nome) { l.push('FN:' + nome); l.push('N:' + nome + ';;;;'); }
+    l.push('FN:' + nome);
+    l.push('N:' + nome + ';;;;');
     if (c.phone) l.push('TEL;TYPE=CELL:' + c.phone);
     if (c.email) l.push('EMAIL;TYPE=INTERNET:' + c.email);
     l.push('END:VCARD');
     return l.join('\r\n');
   }
+  // IMPORTANTE: precisa ser chamada DENTRO do gesto de toque (antes de qualquer await),
+  // senão o Android bloqueia o navigator.share().
   function salvarNaAgenda(c) {
     const blob = new Blob([vcardDe(c)], { type: 'text/vcard;charset=utf-8' });
-    const nome = ((c.name || c.phone || 'contato') + '').replace(/[^\w\-]+/g, '_');
-    downloadOrShare(blob, nome + '.vcf', 'text/vcard');
+    const nome = ((c.name || c.phone || 'contato') + '').replace(/[^\w\-]+/g, '_') + '.vcf';
+    const file = new File([blob], nome, { type: 'text/vcard' });
+
+    // 1) tenta o compartilhamento nativo (o Android oferece "Contatos")
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: c.name || 'Contato' })
+        .catch(() => baixarVcf(blob, nome));   // se recusar/falhar, baixa o cartão
+      return;
+    }
+    // 2) fallback: baixa o .vcf — tocar na notificação abre "adicionar aos contatos"
+    baixarVcf(blob, nome);
+  }
+
+  function baixarVcf(blob, nome) {
+    try {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = nome;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      toast('Cartão salvo — toque na notificação para adicionar aos contatos', 'ok');
+    } catch (e) {
+      toast('Não foi possível gerar o cartão de contato', 'err');
+    }
   }
 
   /* ---------- Templates de mensagem (WhatsApp) ---------- */
@@ -1092,6 +1121,11 @@
         }
         const tambemAgenda = byId('ct-agenda-save').checked;
         if (!isOnline() || !sessionValid()) { toast('Conecte à internet para salvar', 'err'); return; }
+
+        // Agenda PRIMEIRO, ainda dentro do gesto de toque (o Android exige isso).
+        // Usa os dados do formulário — não precisa esperar o banco.
+        if (tambemAgenda) salvarNaAgenda(dados);
+
         try {
           const res = await fetch(apiUrl('/api/contacts'), {
             method: 'POST', headers: authHeaders(), body: JSON.stringify({ contact: dados }),
@@ -1103,8 +1137,7 @@
           state.contatoId = data.contact.id;
           closeSheet();
           render();
-          toast('Contato salvo ✓', 'ok');
-          if (tambemAgenda) salvarNaAgenda(data.contact);
+          if (!tambemAgenda) toast('Contato salvo ✓', 'ok');
         } catch (e) { toast('Erro: ' + e.message, 'err'); }
       };
       if (byId('ct-del')) byId('ct-del').onclick = async () => {
