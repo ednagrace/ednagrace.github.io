@@ -51,6 +51,7 @@
     session: 'edna.session',
     settingsPending: 'edna.settingsPending',
     templates: 'edna.templates',
+    contacts: 'edna.contacts',
   };
 
   // Emails autorizados (o back-end também confere — isto é só para a UX).
@@ -64,7 +65,7 @@
   // Não são segredos (a API só aceita sessão válida de um email da allowlist).
   const API_BASE = 'https://relatorio-api.vercel.app';
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v27'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v28'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -86,7 +87,9 @@
     metas:   load(LS.metas, {}),          // { 'YYYY-MM': número }
     session: load(LS.session, {}),        // { token, email, name, exp }
     templates: load(LS.templates, []),    // [{ id, title, body }]
+    contacts: load(LS.contacts, []),      // [{ id, name, phone, email, gender }]
     msg:     { id: null, title: '', body: '' },
+    contatoId: null,                      // contato selecionado na tela Mensagens
     view:    'list',
     month:   currentMonthKey(),
     search:  '',
@@ -144,6 +147,50 @@
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'Erro ao excluir');
     return data;
+  }
+
+  /* ---------- Contatos ---------- */
+  async function pullContacts() {
+    if (!API_BASE || !sessionValid() || !isOnline()) return;
+    try {
+      const res = await fetch(apiUrl('/api/contacts'), { headers: authHeaders() });
+      if (res.status === 401) { refreshSession(); return; }
+      const data = await res.json();
+      if (data && data.ok) { state.contacts = data.contacts || []; save(LS.contacts, state.contacts); }
+    } catch (e) {}
+  }
+
+  function contatoAtual() {
+    return state.contacts.find(c => String(c.id) === String(state.contatoId)) || null;
+  }
+  function contatoLabel(c) {
+    return (c.name && c.name.trim()) || c.phone || c.email || 'Sem nome';
+  }
+  // Normaliza telefone BR para o formato do wa.me (DDI 55 + DDD + número).
+  function phoneDigits(p) {
+    let d = String(p || '').replace(/\D/g, '');
+    if (!d) return '';
+    if (d.length === 10 || d.length === 11) d = '55' + d;   // faltou o DDI
+    return d;
+  }
+  // A agenda do celular só pode ser LIDA (Contact Picker). Para "salvar na agenda"
+  // geramos um cartão .vcf e o Android pergunta se quer adicionar aos contatos.
+  function contactPickerDisponivel() {
+    return !!(navigator.contacts && navigator.contacts.select && window.ContactsManager);
+  }
+  function vcardDe(c) {
+    const nome = (c.name || '').trim();
+    const l = ['BEGIN:VCARD', 'VERSION:3.0'];
+    if (nome) { l.push('FN:' + nome); l.push('N:' + nome + ';;;;'); }
+    if (c.phone) l.push('TEL;TYPE=CELL:' + c.phone);
+    if (c.email) l.push('EMAIL;TYPE=INTERNET:' + c.email);
+    l.push('END:VCARD');
+    return l.join('\r\n');
+  }
+  function salvarNaAgenda(c) {
+    const blob = new Blob([vcardDe(c)], { type: 'text/vcard;charset=utf-8' });
+    const nome = ((c.name || c.phone || 'contato') + '').replace(/[^\w\-]+/g, '_');
+    downloadOrShare(blob, nome + '.vcf', 'text/vcard');
   }
 
   /* ---------- Templates de mensagem (WhatsApp) ---------- */
@@ -830,7 +877,8 @@
 
   /* ---------------- TELA: MENSAGENS (templates) ---------------- */
   function openMsg() {
-    pullTemplates().then(() => { if (state.view === 'msg') selectFirstTemplate(); });
+    pullTemplates().then(() => { if (state.view === 'msg') { selectFirstTemplate(); render(); } });
+    pullContacts().then(() => { if (state.view === 'msg') render(); });
     selectFirstTemplate();
     state.view = 'msg';
     render();
@@ -850,8 +898,10 @@
   function applyPlaceholders(s) {
     const d = new Date();
     const hoje = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
+    const c = contatoAtual();
     return String(s || '')
       .replace(/{saudacao}/gi, saudacaoAgora())
+      .replace(/{contato}/gi, c ? ((c.name || '').trim() || contatoLabel(c)) : '')
       .replace(/{hoje}/gi, hoje)
       .replace(/{promotora}/gi, state.config.promotora || '')
       .replace(/{loja}/gi, state.config.loja || '');
@@ -860,12 +910,31 @@
   function renderMsg() {
     const cur = state.msg;
     const hojeFmt = (() => { const d = new Date(); return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear(); })();
+    const ct = contatoAtual();
     const phTable = `
       <div class="ph-table">
         <button type="button" class="ph-row" data-ph="{saudacao}"><code>{saudacao}</code><span>${saudacaoAgora()} <i>(muda com a hora)</i></span></button>
+        <button type="button" class="ph-row" data-ph="{contato}"><code>{contato}</code><span>${ct ? esc(contatoLabel(ct)) : '<i>nome do contato escolhido</i>'}</span></button>
         <button type="button" class="ph-row" data-ph="{hoje}"><code>{hoje}</code><span>${hojeFmt}</span></button>
         <button type="button" class="ph-row" data-ph="{promotora}"><code>{promotora}</code><span>${esc(state.config.promotora)}</span></button>
         <button type="button" class="ph-row" data-ph="{loja}"><code>{loja}</code><span>${esc(state.config.loja)}</span></button>
+      </div>`;
+
+    const contatoOpts = ['<option value="">— Sem contato (escolher no WhatsApp) —</option>']
+      .concat(state.contacts.map(c =>
+        `<option value="${c.id}" ${String(c.id) === String(state.contatoId) ? 'selected' : ''}>${esc(contatoLabel(c))}${c.phone ? ' · ' + esc(c.phone) : ''}</option>`))
+      .join('');
+
+    const contatoBloco = `
+      <div class="field">
+        <label>Contato (opcional)</label>
+        <select id="ct-sel">${contatoOpts}</select>
+        <div class="ct-buttons">
+          ${contactPickerDisponivel() ? '<button type="button" class="ct-btn" id="ct-agenda">📇 Da agenda</button>' : ''}
+          <button type="button" class="ct-btn" id="ct-novo">➕ Novo contato</button>
+          ${ct ? '<button type="button" class="ct-btn" id="ct-edit">✏️ Editar</button>' : ''}
+        </div>
+        ${ct && !ct.phone ? '<div class="hint-inline">⚠️ Este contato não tem telefone — o WhatsApp vai abrir para você escolher o destinatário.</div>' : ''}
       </div>`;
     const options = ['<option value="">— Novo template —</option>']
       .concat(state.templates.map(t =>
@@ -878,6 +947,7 @@
         <div style="flex:1"><h1>Mensagens</h1><span class="sub">Templates de WhatsApp</span></div>
       </header>
       <div class="screen">
+        ${contatoBloco}
         <div class="field">
           <label>Template</label>
           <select id="tpl-sel">${options}</select>
@@ -900,6 +970,10 @@
       </div>`;
 
     byId('btn-back').onclick = () => { state.view = 'list'; render(); };
+    byId('ct-sel').onchange = (e) => { state.contatoId = e.target.value || null; render(); };
+    byId('ct-novo').onclick = () => openContatoSheet(null);
+    if (byId('ct-edit')) byId('ct-edit').onclick = () => openContatoSheet(contatoAtual());
+    if (byId('ct-agenda')) byId('ct-agenda').onclick = pegarDaAgenda;
     byId('tpl-sel').onchange = (e) => {
       const id = e.target.value;
       const t = state.templates.find(x => String(x.id) === String(id));
@@ -930,8 +1004,115 @@
   function sendTemplate() {
     const txt = applyPlaceholders(state.msg.body);
     if (!txt.trim()) { toast('Mensagem vazia', 'err'); return; }
-    if (navigator.share) navigator.share({ text: txt }).catch(() => {});
-    else window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
+    const c = contatoAtual();
+    const tel = c ? phoneDigits(c.phone) : '';
+    // Com telefone → abre a conversa direto. Sem telefone → WhatsApp pede o destinatário.
+    window.open('https://wa.me/' + tel + '?text=' + encodeURIComponent(txt), '_blank');
+  }
+
+  /* ---------- Contatos: pegar da agenda + editor ---------- */
+  async function pegarDaAgenda() {
+    if (!contactPickerDisponivel()) { toast('Seu navegador não permite ler a agenda', 'err'); return; }
+    try {
+      const sel = await navigator.contacts.select(['name', 'tel', 'email'], { multiple: false });
+      if (!sel || !sel.length) return;
+      const a = sel[0];
+      openContatoSheet({
+        id: null,
+        name: (a.name && a.name[0]) || '',
+        phone: (a.tel && a.tel[0]) || '',
+        email: (a.email && a.email[0]) || '',
+        gender: '',
+      });
+    } catch (e) {
+      toast('Não foi possível abrir a agenda', 'err');
+    }
+  }
+
+  function openContatoSheet(c) {
+    const cur = c || { id: null, name: '', phone: '', email: '', gender: '' };
+    const isNew = !cur.id;
+    openSheet(`
+      <h2>${isNew ? 'Novo contato' : 'Editar contato'}</h2>
+      <div class="field">
+        <label>Nome (opcional)</label>
+        <input id="ct-name" type="text" value="${esc(cur.name || '')}" placeholder="Ex.: Maria Silva" />
+      </div>
+      <div class="field">
+        <label>Telefone (opcional)</label>
+        <input id="ct-phone" type="tel" inputmode="tel" value="${esc(cur.phone || '')}" placeholder="(19) 99999-9999" />
+      </div>
+      <div class="field">
+        <label>E-mail (opcional)</label>
+        <input id="ct-email" type="email" inputmode="email" value="${esc(cur.email || '')}" placeholder="maria@email.com" />
+      </div>
+      <div class="field">
+        <label>Gênero (opcional)</label>
+        <select id="ct-gender">
+          <option value="" ${!cur.gender ? 'selected' : ''}>— Não informar —</option>
+          <option value="feminino" ${cur.gender === 'feminino' ? 'selected' : ''}>Feminino</option>
+          <option value="masculino" ${cur.gender === 'masculino' ? 'selected' : ''}>Masculino</option>
+          <option value="outro" ${cur.gender === 'outro' ? 'selected' : ''}>Outro</option>
+        </select>
+      </div>
+      <label class="check-row">
+        <input type="checkbox" id="ct-agenda-save" />
+        <span>Salvar também na agenda do celular
+          <small>Gera o cartão de contato — o celular pergunta se quer adicionar.</small></span>
+      </label>
+      <div class="actions">
+        ${!isNew ? '<button class="secondary" id="ct-del">🗑️ Excluir</button>' : ''}
+        <button class="primary" id="ct-save" style="flex:1">Salvar contato</button>
+      </div>
+      <div class="status-line" id="ct-status"></div>
+    `, () => {
+      byId('ct-save').onclick = async () => {
+        const dados = {
+          id: cur.id || undefined,
+          name: byId('ct-name').value.trim(),
+          phone: byId('ct-phone').value.trim(),
+          email: byId('ct-email').value.trim(),
+          gender: byId('ct-gender').value,
+        };
+        if (!dados.name && !dados.phone && !dados.email) {
+          byId('ct-status').textContent = 'Preencha ao menos nome, telefone ou e-mail.';
+          byId('ct-status').style.color = '#d10a11';
+          return;
+        }
+        const tambemAgenda = byId('ct-agenda-save').checked;
+        if (!isOnline() || !sessionValid()) { toast('Conecte à internet para salvar', 'err'); return; }
+        try {
+          const res = await fetch(apiUrl('/api/contacts'), {
+            method: 'POST', headers: authHeaders(), body: JSON.stringify({ contact: dados }),
+          });
+          if (res.status === 401) { refreshSession(); toast('Faça login novamente', 'err'); return; }
+          const data = await res.json();
+          if (!data.ok) throw new Error(data.error || 'falha');
+          await pullContacts();
+          state.contatoId = data.contact.id;
+          closeSheet();
+          render();
+          toast('Contato salvo ✓', 'ok');
+          if (tambemAgenda) salvarNaAgenda(data.contact);
+        } catch (e) { toast('Erro: ' + e.message, 'err'); }
+      };
+      if (byId('ct-del')) byId('ct-del').onclick = async () => {
+        if (!window.confirm('Excluir o contato “' + contatoLabel(cur) + '”?')) return;
+        if (!isOnline() || !sessionValid()) { toast('Conecte à internet para excluir', 'err'); return; }
+        try {
+          const res = await fetch(apiUrl('/api/contacts?id=' + encodeURIComponent(cur.id)), {
+            method: 'DELETE', headers: authHeaders(),
+          });
+          const data = await res.json();
+          if (!data.ok) throw new Error(data.error || 'falha');
+          await pullContacts();
+          state.contatoId = null;
+          closeSheet();
+          render();
+          toast('Contato excluído', 'ok');
+        } catch (e) { toast('Erro: ' + e.message, 'err'); }
+      };
+    });
   }
 
   async function saveTemplate() {
@@ -1705,6 +1886,7 @@
     await flushSettings();   // envia mudanças locais pendentes (merge no servidor)
     await pullSettings();    // baixa a config compartilhada
     pullTemplates();         // baixa os templates de mensagem
+    pullContacts();          // baixa os contatos
     refreshFromCloud(true);
     flushQueue(true);
   }

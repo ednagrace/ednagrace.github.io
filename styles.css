@@ -288,6 +288,23 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 }
 .ph-row span { font-size: 13px; color: var(--muted); }
 .ph-row span i { font-style: normal; opacity: .8; }
+/* Bloco de contato na tela Mensagens */
+.ct-buttons { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.ct-btn {
+  flex: 1 1 auto; min-height: 42px; border-radius: 11px; border: 1.5px solid var(--line);
+  background: #fbfbfc; font-size: 13.5px; font-weight: 700; color: var(--ink); padding: 0 12px;
+}
+.ct-btn:active { background: var(--red-soft); }
+
+/* Checkbox "salvar também na agenda" */
+.check-row {
+  display: flex; align-items: flex-start; gap: 11px; padding: 12px;
+  border: 1.5px solid var(--line); border-radius: 12px; background: #fbfbfc; margin-bottom: 14px;
+}
+.check-row input[type="checkbox"] { width: 22px; height: 22px; margin: 1px 0 0; flex: 0 0 auto; accent-color: var(--red); }
+.check-row span { font-size: 14px; font-weight: 600; color: var(--ink); }
+.check-row small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; margin-top: 3px; }
+
 .msg-actions { display: flex; gap: 10px; margin-top: 8px; }
 .msg-actions .btn-ghost { height: 52px; border: 1.5px solid var(--line); border-radius: 14px; background: #fff; color: var(--muted); font-size: 15px; font-weight: 700; padding: 0 16px; }
 .msg-actions .btn-save { flex: 1; height: 52px; border: none; border-radius: 14px; background: var(--red); color: #fff; font-size: 16px; font-weight: 800; }
