@@ -65,7 +65,7 @@
   // Não são segredos (a API só aceita sessão válida de um email da allowlist).
   const API_BASE = 'https://relatorio-api.vercel.app';
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v28'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v29'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -895,6 +895,15 @@
     if (h >= 12 && h < 18) return 'Boa tarde';
     return 'Boa noite';
   }
+  // Flexão de gênero do contato: masculino → "o", feminino → "a", outro/sem info → "o(a)".
+  // Ex.: "atendê-l{oa}" vira atendê-lo / atendê-la / atendê-lo(a).
+  function oaDoContato() {
+    const c = contatoAtual();
+    const g = c && c.gender ? String(c.gender).toLowerCase() : '';
+    if (g === 'masculino') return 'o';
+    if (g === 'feminino') return 'a';
+    return 'o(a)';
+  }
   function applyPlaceholders(s) {
     const d = new Date();
     const hoje = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
@@ -902,6 +911,7 @@
     return String(s || '')
       .replace(/{saudacao}/gi, saudacaoAgora())
       .replace(/{contato}/gi, c ? ((c.name || '').trim() || contatoLabel(c)) : '')
+      .replace(/{oa}/gi, oaDoContato())
       .replace(/{hoje}/gi, hoje)
       .replace(/{promotora}/gi, state.config.promotora || '')
       .replace(/{loja}/gi, state.config.loja || '');
@@ -915,6 +925,7 @@
       <div class="ph-table">
         <button type="button" class="ph-row" data-ph="{saudacao}"><code>{saudacao}</code><span>${saudacaoAgora()} <i>(muda com a hora)</i></span></button>
         <button type="button" class="ph-row" data-ph="{contato}"><code>{contato}</code><span>${ct ? esc(contatoLabel(ct)) : '<i>nome do contato escolhido</i>'}</span></button>
+        <button type="button" class="ph-row" data-ph="{oa}"><code>{oa}</code><span>${esc(oaDoContato())} <i>— ex.: atendê-l{oa} → atendê-l${esc(oaDoContato())}</i></span></button>
         <button type="button" class="ph-row" data-ph="{hoje}"><code>{hoje}</code><span>${hojeFmt}</span></button>
         <button type="button" class="ph-row" data-ph="{promotora}"><code>{promotora}</code><span>${esc(state.config.promotora)}</span></button>
         <button type="button" class="ph-row" data-ph="{loja}"><code>{loja}</code><span>${esc(state.config.loja)}</span></button>
