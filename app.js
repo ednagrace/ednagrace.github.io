@@ -65,7 +65,7 @@
   // Não são segredos (a API só aceita sessão válida de um email da allowlist).
   const API_BASE = 'https://relatorio-api.vercel.app';
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v32'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v33'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -216,7 +216,7 @@
       document.body.appendChild(a);
       a.click();
       a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      setTimeout(() => URL.revokeObjectURL(url), 15000);
       toast('Cartão salvo — toque na notificação para adicionar aos contatos', 'ok');
     } catch (e) {
       toast('Não foi possível gerar o cartão de contato', 'err');
@@ -523,18 +523,83 @@
     return new Blob([bytes], { type: mime });
   }
 
+  const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
   async function baixarModelo() {
-    if (!isOnline() || !sessionValid()) { toast('Conecte à internet', 'err'); return; }
+    if (!isOnline() || !sessionValid()) { toast('Conecte à internet para baixar o modelo', 'err'); return; }
+    const btn = byId('imp-modelo');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Preparando modelo...'; }
     try {
       const res = await fetch(apiUrl('/api/import'), { headers: authHeaders() });
-      if (res.status === 401) { refreshSession(); toast('Faça login novamente', 'err'); return; }
+      if (res.status === 401) { refreshSession(); throw new Error('sessão expirada — faça login de novo'); }
+      if (!res.ok) throw new Error('o servidor respondeu ' + res.status);
       const data = await res.json();
-      if (!data.ok) throw new Error(data.error || 'falha');
-      const blob = base64ToBlob(data.base64,
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      downloadOrShare(blob, data.filename || 'modelo_relatorios.xlsx',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    } catch (e) { toast('Erro ao baixar modelo: ' + e.message, 'err'); }
+      if (!data.ok || !data.base64) throw new Error(data.error || 'resposta inválida do servidor');
+
+      const blob = base64ToBlob(data.base64, XLSX_MIME);
+      if (!blob.size) throw new Error('arquivo veio vazio');
+      // Mostra uma tela com botões: o download/compartilhar acontece no TOQUE dela
+      // (se fizermos aqui, direto, o Android bloqueia por não haver gesto do usuário).
+      mostrarArquivoPronto(blob, data.filename || 'modelo_relatorios.xlsx', XLSX_MIME);
+    } catch (e) {
+      toast('Não consegui baixar o modelo: ' + e.message, 'err');
+    } finally {
+      const b = byId('imp-modelo');
+      if (b) { b.disabled = false; b.textContent = '📥 Baixar modelo (XLSX)'; }
+    }
+  }
+
+  // Tela "arquivo pronto": diz o nome/tamanho e dá as opções (com gesto do usuário).
+  function mostrarArquivoPronto(blob, fname, mime) {
+    const url = URL.createObjectURL(blob);
+    const kb = Math.max(1, Math.round(blob.size / 1024));
+    let podeCompartilhar = false;
+    try {
+      podeCompartilhar = !!(navigator.canShare &&
+        navigator.canShare({ files: [new File([blob], fname, { type: mime })] }));
+    } catch (e) {}
+
+    openSheet(`
+      <h2>Modelo pronto ✓</h2>
+      <div class="file-ready">
+        <span class="fr-ico">📄</span>
+        <span class="fr-txt"><b>${esc(fname)}</b><small>${kb} KB · planilha XLSX</small></span>
+      </div>
+      <div class="actions">
+        ${podeCompartilhar ? '<button class="secondary" id="fr-share">📤 Abrir / Compartilhar</button>' : ''}
+        <button class="primary" id="fr-save" style="flex:1">⬇️ Salvar no celular</button>
+      </div>
+      <div class="status-line" id="fr-status" style="margin-top:12px">
+        ${podeCompartilhar
+          ? 'Use “Abrir / Compartilhar” para mandar direto ao Google Planilhas, Excel ou WhatsApp.'
+          : 'O arquivo será salvo na pasta <b>Downloads</b>.'}
+      </div>
+    `, () => {
+      const st = byId('fr-status');
+      byId('fr-save').onclick = () => {
+        try {
+          const a = document.createElement('a');
+          a.href = url; a.download = fname;
+          document.body.appendChild(a); a.click(); a.remove();
+          st.innerHTML = '✅ Salvo em <b>Downloads</b> — toque na notificação do navegador para abrir.';
+          st.style.color = '#1e9e57';
+        } catch (e) {
+          st.textContent = '✗ Não consegui salvar: ' + e.message;
+          st.style.color = '#d10a11';
+        }
+      };
+      if (byId('fr-share')) byId('fr-share').onclick = async () => {
+        try {
+          await navigator.share({ files: [new File([blob], fname, { type: mime })], title: fname });
+          st.textContent = '✅ Enviado.';
+          st.style.color = '#1e9e57';
+        } catch (e) {
+          st.innerHTML = 'Compartilhamento cancelado ou não suportado — use <b>“Salvar no celular”</b>.';
+          st.style.color = '#e08a00';
+        }
+      };
+    });
+    setTimeout(() => URL.revokeObjectURL(url), 120000);
   }
 
   async function analisarPlanilha(commit) {
@@ -2019,17 +2084,33 @@
   }
 
   function downloadOrShare(blob, fname, mime) {
-    const file = new File([blob], fname, { type: mime });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      navigator.share({ files: [file], title: fname }).catch(()=>{});
-      return;
-    }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = fname; document.body.appendChild(a); a.click();
-    a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
-    toast('Arquivo baixado ✓', 'ok');
+    try {
+      const file = new File([blob], fname, { type: mime });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        // Se o share falhar (ex.: sem gesto do usuário) ou for cancelado → baixa o arquivo.
+        navigator.share({ files: [file], title: fname })
+          .catch(() => baixarArquivo(blob, fname));
+        return;
+      }
+    } catch (e) { /* cai no download abaixo */ }
+    baixarArquivo(blob, fname);
   }
+
+  function baixarArquivo(blob, fname) {
+    try {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 15000);
+      toast('Salvo em Downloads: ' + fname, 'ok');
+    } catch (e) {
+      toast('Não foi possível salvar o arquivo', 'err');
+    }
+  }
+
 
   /* ---------------- Bottom sheet ---------------- */
   function openSheet(html, onReady) {
