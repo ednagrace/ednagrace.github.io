@@ -65,7 +65,7 @@
   // Não são segredos (a API só aceita sessão válida de um email da allowlist).
   const API_BASE = 'https://relatorio-api.vercel.app';
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v35'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v36'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -585,13 +585,12 @@
         <span class="fr-txt"><b>${esc(fname)}</b><small>${kb} KB · planilha XLSX</small></span>
       </div>
       <div class="actions">
-        ${podeCompartilhar ? '<button class="secondary" id="fr-share">📤 Abrir / Compartilhar</button>' : ''}
         <button class="primary" id="fr-save" style="flex:1">⬇️ Salvar no celular</button>
+        ${podeCompartilhar ? '<button class="secondary" id="fr-share">📤 Compartilhar</button>' : ''}
       </div>
       <div class="status-line" id="fr-status" style="margin-top:12px">
-        ${podeCompartilhar
-          ? 'Use “Abrir / Compartilhar” para mandar direto ao Google Planilhas, Excel ou WhatsApp.'
-          : 'O arquivo será salvo na pasta <b>Downloads</b>.'}
+        Toque em <b>Salvar</b>: o arquivo vai para <b>Downloads</b> e o celular mostra uma
+        notificação — é só tocar nela para abrir no Google Planilhas ou Excel.
       </div>
     `, () => {
       const st = byId('fr-status');
