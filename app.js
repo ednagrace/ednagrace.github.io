@@ -65,7 +65,7 @@
   // Não são segredos (a API só aceita sessão válida de um email da allowlist).
   const API_BASE = 'https://relatorio-api.vercel.app';
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v37'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v38'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -490,19 +490,20 @@
         <button type="button" class="pdf-btn" id="imp-modelo" style="margin-top:12px">⬇️ Ou baixar modelo em XLSX (Excel)</button>
 
         <h2 class="panel-h">1. Escolha a planilha</h2>
-        <label class="imp-file">
-          <input type="file" id="imp-input" accept=".csv,.xlsx,.xls,.ods,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.oasis.opendocument.spreadsheet" hidden />
-          <span class="imp-file-ico">📄</span>
-          <span class="imp-file-txt">${imp.fileName ? esc(imp.fileName) : 'Escolher arquivo (CSV, XLSX, XLS, ODS)'}</span>
-        </label>
-
-        <div class="imp-or">ou</div>
 
         <div class="field">
           <label>Link da planilha do Google</label>
           <input id="imp-url" type="url" inputmode="url" placeholder="https://docs.google.com/spreadsheets/d/..." value="${esc(imp.sheetUrl || '')}" />
           <div class="hint-inline">Planilhas criadas aqui (pasta <b>Edna App</b>) são lidas direto do Drive — <b>não precisam ser públicas</b>. Só uma planilha de fora exigiria compartilhamento por link.</div>
         </div>
+
+        <div class="imp-or">ou</div>
+
+        <label class="imp-file">
+          <input type="file" id="imp-input" accept=".csv,.xlsx,.xls,.ods,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.oasis.opendocument.spreadsheet" hidden />
+          <span class="imp-file-ico">📄</span>
+          <span class="imp-file-txt">${imp.fileName ? esc(imp.fileName) : 'Escolher arquivo (CSV, XLSX, XLS, ODS)'}</span>
+        </label>
 
         <button type="button" class="btn-save" id="imp-analisar" style="width:100%;height:54px;margin-top:6px" ${imp.busy ? 'disabled' : ''}>
           ${imp.busy ? 'Analisando...' : '🔎 Analisar planilha'}
