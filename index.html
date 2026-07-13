@@ -31,7 +31,20 @@
       window.addEventListener('load', function () {
         navigator.serviceWorker.register('sw.js').then(function (reg) {
           reg.update();
-          setInterval(function () { reg.update(); }, 30 * 60 * 1000); // checa a cada 30 min
+          // checa versão nova sempre que o app volta para a tela (e a cada 15 min)
+          document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) reg.update();
+          });
+          setInterval(function () { reg.update(); }, 15 * 60 * 1000);
+          // se uma versão nova já estiver esperando, ativa na hora
+          if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
+          reg.addEventListener('updatefound', function () {
+            var novo = reg.installing;
+            if (!novo) return;
+            novo.addEventListener('statechange', function () {
+              if (novo.state === 'installed' && reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
+            });
+          });
         }).catch(function () {});
       });
     }

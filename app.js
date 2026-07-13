@@ -65,7 +65,7 @@
   // Não são segredos (a API só aceita sessão válida de um email da allowlist).
   const API_BASE = 'https://relatorio-api.vercel.app';
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v33'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v34'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -246,6 +246,25 @@
   const ADMIN_EMAIL = 'jpantunesdesouza@gmail.com';
   function ehAdmin() {
     return String(state.session.email || '').toLowerCase() === ADMIN_EMAIL;
+  }
+
+  /* Escape hatch contra cache teimoso: apaga TODOS os caches, desregistra o service
+     worker e recarrega com cache-buster. A sessão e os dados locais são preservados
+     (ficam no localStorage, que não é tocado). */
+  async function forcarAtualizacao() {
+    toast('Limpando cache e recarregando...');
+    try {
+      if (window.caches) {
+        const chaves = await caches.keys();
+        await Promise.all(chaves.map((k) => caches.delete(k)));
+      }
+      if (navigator.serviceWorker) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+    } catch (e) { /* segue e recarrega mesmo assim */ }
+    // cache-buster na URL para furar também o cache HTTP (max-age=600 do GitHub Pages)
+    location.replace(location.origin + location.pathname + '?u=' + Date.now());
   }
 
   let gisTries = 0;
@@ -1686,6 +1705,10 @@
         <span class="mi-ico">🔧</span>
         <span>Configurações<small>Promotora, loja e meta do dia</small></span>
       </button>
+      <button class="menu-item" id="mi-update">
+        <span class="mi-ico">🔄</span>
+        <span>Forçar atualização<small>Limpa o cache e recarrega o app (${APP_VERSION})</small></span>
+      </button>
       ${ehAdmin() ? `<button class="menu-item" id="mi-docs">
         <span class="mi-ico">📖</span>
         <span>Documentação da API<small>Só para o desenvolvedor</small></span>
@@ -1701,6 +1724,7 @@
       byId('mi-panel').onclick = () => { closeSheet(); openPanel(); };
       byId('mi-sheet').onclick = () => { closeSheet(); generateSheet(); };
       byId('mi-import').onclick = () => { closeSheet(); openImport(); };
+      byId('mi-update').onclick = () => { closeSheet(); forcarAtualizacao(); };
       if (byId('mi-docs')) byId('mi-docs').onclick = () => {
         closeSheet();
         window.open(apiUrl('/docs?token=' + encodeURIComponent(state.session.token || '')), '_blank');
