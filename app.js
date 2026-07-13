@@ -65,7 +65,7 @@
   // Não são segredos (a API só aceita sessão válida de um email da allowlist).
   const API_BASE = 'https://relatorio-api.vercel.app';
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v30'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v31'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -90,6 +90,7 @@
     contacts: load(LS.contacts, []),      // [{ id, name, phone, email, gender }]
     msg:     { id: null, title: '', body: '' },
     contatoId: null,                      // contato selecionado na tela Mensagens
+    imp:     { file: null, fileName: '', sheetUrl: '', preview: null, busy: false },
     view:    'list',
     month:   currentMonthKey(),
     search:  '',
@@ -423,7 +424,152 @@
     if (state.view === 'form') return renderForm();
     if (state.view === 'panel') return renderPanel();
     if (state.view === 'msg') return renderMsg();
+    if (state.view === 'import') return renderImport();
     return renderList();
+  }
+
+  /* ---------------- TELA: IMPORTAR PLANILHA ---------------- */
+  function openImport() {
+    state.imp = { file: null, fileName: '', sheetUrl: '', preview: null, busy: false };
+    state.view = 'import';
+    render();
+    window.scrollTo(0, 0);
+  }
+
+  function renderImport() {
+    const imp = state.imp || {};
+    const p = imp.preview;
+
+    const previaHTML = !p ? '' : `
+      <div class="imp-preview">
+        <div class="imp-nums">
+          <div><b>${p.total}</b><span>relatórios</span></div>
+          <div class="ok"><b>${p.novos}</b><span>novos</span></div>
+          <div class="warn"><b>${p.substituidos}</b><span>substituem</span></div>
+          <div class="err"><b>${(p.errors || []).length}</b><span>erros</span></div>
+        </div>
+        ${p.substituidos ? `<div class="hint-inline">⚠️ ${p.substituidos} dia(s) já existem e serão <b>substituídos</b> pelos dados da planilha.</div>` : ''}
+        ${(p.errors || []).length ? `<div class="imp-errors">${p.errors.slice(0, 8).map(e =>
+            `<div>Linha ${e.linha}: ${esc(e.erro)}</div>`).join('')}${p.errors.length > 8 ? `<div>… e mais ${p.errors.length - 8}</div>` : ''}</div>` : ''}
+        ${p.aviso ? `<div class="hint-inline">${esc(p.aviso)}</div>` : ''}
+        ${p.total ? `<button type="button" class="btn-save" id="imp-commit" style="width:100%;height:54px;margin-top:14px">✅ Importar ${p.total} relatório(s)</button>` : ''}
+      </div>`;
+
+    app.innerHTML = `
+      <header class="appbar">
+        <button class="iconbtn" id="btn-back" aria-label="Voltar">‹</button>
+        <div style="flex:1"><h1>Importar planilha</h1><span class="sub">Criar relatórios em massa</span></div>
+      </header>
+      <div class="screen">
+        <button type="button" class="pdf-btn" id="imp-modelo">📥 Baixar modelo (XLSX)</button>
+        <div class="hint-inline">Use o modelo — é o <b>mesmo formato</b> da planilha que o app salva no Google Drive. Preencha e envie de volta.</div>
+
+        <h2 class="panel-h">1. Escolha a planilha</h2>
+        <label class="imp-file">
+          <input type="file" id="imp-input" accept=".csv,.xlsx,.xls,.ods,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.oasis.opendocument.spreadsheet" hidden />
+          <span class="imp-file-ico">📄</span>
+          <span class="imp-file-txt">${imp.fileName ? esc(imp.fileName) : 'Escolher arquivo (CSV, XLSX, XLS, ODS)'}</span>
+        </label>
+
+        <div class="imp-or">ou</div>
+
+        <div class="field">
+          <label>Link da planilha do Google</label>
+          <input id="imp-url" type="url" inputmode="url" placeholder="https://docs.google.com/spreadsheets/d/..." value="${esc(imp.sheetUrl || '')}" />
+          <div class="hint-inline">A planilha precisa estar compartilhada como <b>“qualquer pessoa com o link pode ver”</b>.</div>
+        </div>
+
+        <button type="button" class="btn-save" id="imp-analisar" style="width:100%;height:54px;margin-top:6px" ${imp.busy ? 'disabled' : ''}>
+          ${imp.busy ? 'Analisando...' : '🔎 Analisar planilha'}
+        </button>
+
+        ${p ? '<h2 class="panel-h">2. Confira antes de importar</h2>' : ''}
+        ${previaHTML}
+      </div>`;
+
+    byId('btn-back').onclick = () => { state.view = 'list'; render(); };
+    byId('imp-modelo').onclick = baixarModelo;
+    byId('imp-input').onchange = (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      state.imp.file = f;
+      state.imp.fileName = f.name;
+      state.imp.preview = null;
+      render();
+    };
+    byId('imp-url').oninput = (e) => { state.imp.sheetUrl = e.target.value.trim(); };
+    byId('imp-analisar').onclick = () => analisarPlanilha(false);
+    if (byId('imp-commit')) byId('imp-commit').onclick = () => analisarPlanilha(true);
+  }
+
+  function bufToBase64(buf) {
+    const bytes = new Uint8Array(buf);
+    let bin = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return btoa(bin);
+  }
+  function base64ToBlob(b64, mime) {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+  }
+
+  async function baixarModelo() {
+    if (!isOnline() || !sessionValid()) { toast('Conecte à internet', 'err'); return; }
+    try {
+      const res = await fetch(apiUrl('/api/import'), { headers: authHeaders() });
+      if (res.status === 401) { refreshSession(); toast('Faça login novamente', 'err'); return; }
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'falha');
+      const blob = base64ToBlob(data.base64,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      downloadOrShare(blob, data.filename || 'modelo_relatorios.xlsx',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    } catch (e) { toast('Erro ao baixar modelo: ' + e.message, 'err'); }
+  }
+
+  async function analisarPlanilha(commit) {
+    const imp = state.imp;
+    if (!imp.file && !imp.sheetUrl) { toast('Escolha um arquivo ou cole o link', 'err'); return; }
+    if (!isOnline() || !sessionValid()) { toast('Conecte à internet', 'err'); return; }
+
+    imp.busy = true; render();
+    try {
+      const body = { commit: !!commit, promotora: state.config.promotora, loja: state.config.loja };
+      if (imp.file) {
+        if (imp.file.size > 3 * 1024 * 1024) throw new Error('arquivo muito grande (máx. 3 MB)');
+        body.fileBase64 = bufToBase64(await imp.file.arrayBuffer());
+        body.filename = imp.fileName;
+      } else {
+        body.sheetUrl = imp.sheetUrl;
+      }
+
+      const res = await fetch(apiUrl('/api/import'), {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify(body),
+      });
+      if (res.status === 401) { refreshSession(); toast('Faça login novamente', 'err'); imp.busy = false; render(); return; }
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'falha');
+
+      imp.busy = false;
+      if (commit) {
+        await refreshFromCloud(true);
+        state.view = 'list';
+        render();
+        toast(data.imported + ' relatório(s) importado(s) ✓', 'ok');
+      } else {
+        imp.preview = data;
+        render();
+      }
+    } catch (e) {
+      imp.busy = false;
+      render();
+      toast('Erro: ' + e.message, 'err');
+    }
   }
 
   /* ---------- Agregações (painel / resumo) ---------- */
@@ -466,7 +612,7 @@
           <p class="auth-sub">${esc(state.config.promotora)} · ${esc(state.config.loja)}</p>
           <div id="gbtn" class="gbtn-wrap"></div>
           <p class="auth-note">Entre com a conta Google autorizada.<br>Você só faz isso uma vez.</p>
-          <div class="app-version">${APP_VERSION}</div>
+          <div class="app-version">${APP_VERSION}<br><b>Desenvolvido por JPANTUNES13</b></div>
         </div>
       </div>`;
     initGis(() => {
@@ -1454,6 +1600,10 @@
         <span class="mi-ico">📗</span>
         <span>Gerar planilha do Google<small>Salva no Drive e compartilha</small></span>
       </button>
+      <button class="menu-item" id="mi-import">
+        <span class="mi-ico">📥</span>
+        <span>Importar planilha<small>Criar relatórios em massa (CSV, XLSX, XLS, ODS)</small></span>
+      </button>
       <button class="menu-item" id="mi-share">
         <span class="mi-ico">💬</span>
         <span>Compartilhar resumo do dia<small>Enviar por WhatsApp</small></span>
@@ -1471,11 +1621,12 @@
         <span>Sair<small>${esc(state.session.email || '')}</small></span>
       </button>
       <div class="status-line" id="cfg-status" style="margin-top:12px"></div>
-      <div class="app-version">Relatório Diário · ${APP_VERSION}</div>
+      <div class="app-version">Relatório Diário · ${APP_VERSION}<br><b>Desenvolvido por JPANTUNES13</b></div>
     `, () => {
       byId('mi-config').onclick = () => { closeSheet(); openConfig(); };
       byId('mi-panel').onclick = () => { closeSheet(); openPanel(); };
       byId('mi-sheet').onclick = () => { closeSheet(); generateSheet(); };
+      byId('mi-import').onclick = () => { closeSheet(); openImport(); };
       byId('mi-share').onclick = () => { closeSheet(); shareToday(); };
       byId('mi-msg').onclick = () => { closeSheet(); openMsg(); };
       byId('mi-logout').onclick = () => { closeSheet(); logout(); };

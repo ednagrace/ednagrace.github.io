@@ -374,7 +374,36 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
   font-size: 16px; font-weight: 600; width: 100%; background: none; border-left: none; border-right: none; border-top: none; text-align: left;
 }
 .sheet .menu-item .mi-ico { font-size: 22px; }
-.app-version { text-align: center; font-size: 11px; color: var(--muted); margin-top: 14px; letter-spacing: .03em; }
+.app-version { text-align: center; font-size: 11px; color: var(--muted); margin-top: 14px; letter-spacing: .03em; line-height: 1.7; }
+.app-version b { color: var(--red-dark); font-weight: 700; letter-spacing: .04em; }
+
+/* ---------- Tela Importar planilha ---------- */
+.imp-file {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  border: 2px dashed var(--line); border-radius: 14px; padding: 18px 16px;
+  background: var(--card); cursor: pointer;
+}
+.imp-file:active { background: var(--red-soft); border-color: var(--red); }
+.imp-file-ico { font-size: 26px; }
+.imp-file-txt { font-size: 14px; font-weight: 700; color: var(--ink); word-break: break-all; }
+.imp-or { text-align: center; color: var(--muted); font-size: 12px; font-weight: 700; margin: 14px 0; }
+.imp-preview {
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+  padding: 16px; box-shadow: var(--shadow);
+}
+.imp-nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; }
+.imp-nums > div { background: #f6f7f9; border-radius: 12px; padding: 10px 4px; }
+.imp-nums b { display: block; font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.imp-nums span { font-size: 10.5px; color: var(--muted); font-weight: 600; }
+.imp-nums .ok b { color: var(--green); }
+.imp-nums .warn b { color: var(--amber); }
+.imp-nums .err b { color: var(--red); }
+.imp-errors {
+  margin-top: 12px; background: var(--red-soft); border-radius: 10px; padding: 10px 12px;
+  font-size: 12.5px; color: var(--red-dark); display: flex; flex-direction: column; gap: 3px;
+}
+.imp-preview .btn-save { border: none; color: #fff; background: var(--red); border-radius: 14px; font-size: 16px; font-weight: 800; }
+.imp-preview .btn-save:active { background: var(--red-dark); }
 .sheet .menu-item small { display: block; font-weight: 400; color: var(--muted); font-size: 12.5px; }
 
 /* ---------- Toast ---------- */
