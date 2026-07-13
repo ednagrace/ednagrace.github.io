@@ -65,7 +65,7 @@
   // Não são segredos (a API só aceita sessão válida de um email da allowlist).
   const API_BASE = 'https://relatorio-api.vercel.app';
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v34'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v35'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -608,13 +608,32 @@
         }
       };
       if (byId('fr-share')) byId('fr-share').onclick = async () => {
+        const file = new File([blob], fname, { type: mime });
         try {
-          await navigator.share({ files: [new File([blob], fname, { type: mime })], title: fname });
+          if (!navigator.share) throw new Error('navigator.share indisponível');
+          await navigator.share({ files: [file], title: fname });
           st.textContent = '✅ Enviado.';
           st.style.color = '#1e9e57';
         } catch (e) {
-          st.innerHTML = 'Compartilhamento cancelado ou não suportado — use <b>“Salvar no celular”</b>.';
+          // AbortError = o usuário fechou o menu de compartilhar (não é erro de verdade)
+          if (e && e.name === 'AbortError') {
+            st.textContent = 'Compartilhamento cancelado.';
+            st.style.color = '#6b7280';
+            return;
+          }
+          // Qualquer outra falha → baixa o arquivo, para nunca ficar sem nada.
+          st.innerHTML = 'Não deu para compartilhar (<b>' + esc(e && e.name ? e.name : 'erro') + ': ' +
+            esc(e && e.message ? e.message : '?') + '</b>). Baixando o arquivo...';
           st.style.color = '#e08a00';
+          try {
+            const a = document.createElement('a');
+            a.href = url; a.download = fname;
+            document.body.appendChild(a); a.click(); a.remove();
+            st.innerHTML += '<br>✅ Salvo em <b>Downloads</b> — toque na notificação para abrir.';
+          } catch (e2) {
+            st.innerHTML += '<br>✗ Também falhou ao baixar: ' + esc(e2.message);
+            st.style.color = '#d10a11';
+          }
         }
       };
     });

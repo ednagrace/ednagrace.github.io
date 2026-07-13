@@ -2,7 +2,7 @@
    Estratégia: CACHE PRIMEIRO (rápido para a promotora) + revalidação em segundo plano.
    Quando uma versão nova é detectada, ela ativa na hora e a página recarrega sozinha.
    Troque a versão a cada atualização. */
-const CACHE = 'edna-relatorio-v34';
+const CACHE = 'edna-relatorio-v35';
 const ASSETS = [
   './',
   './index.html',
