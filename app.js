@@ -65,7 +65,7 @@
   // Não são segredos (a API só aceita sessão válida de um email da allowlist).
   const API_BASE = 'https://relatorio-api.vercel.app';
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v31'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v32'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -241,6 +241,11 @@
   function sessionValid() {
     return !!(state.session && state.session.token && state.session.exp &&
              (state.session.exp * 1000 > Date.now()));
+  }
+  // Itens só de desenvolvedor (ex.: documentação da API)
+  const ADMIN_EMAIL = 'jpantunesdesouza@gmail.com';
+  function ehAdmin() {
+    return String(state.session.email || '').toLowerCase() === ADMIN_EMAIL;
   }
 
   let gisTries = 0;
@@ -1616,6 +1621,10 @@
         <span class="mi-ico">🔧</span>
         <span>Configurações<small>Promotora, loja e meta do dia</small></span>
       </button>
+      ${ehAdmin() ? `<button class="menu-item" id="mi-docs">
+        <span class="mi-ico">📖</span>
+        <span>Documentação da API<small>Só para o desenvolvedor</small></span>
+      </button>` : ''}
       <button class="menu-item" id="mi-logout">
         <span class="mi-ico">🚪</span>
         <span>Sair<small>${esc(state.session.email || '')}</small></span>
@@ -1627,6 +1636,10 @@
       byId('mi-panel').onclick = () => { closeSheet(); openPanel(); };
       byId('mi-sheet').onclick = () => { closeSheet(); generateSheet(); };
       byId('mi-import').onclick = () => { closeSheet(); openImport(); };
+      if (byId('mi-docs')) byId('mi-docs').onclick = () => {
+        closeSheet();
+        window.open(apiUrl('/docs?token=' + encodeURIComponent(state.session.token || '')), '_blank');
+      };
       byId('mi-share').onclick = () => { closeSheet(); shareToday(); };
       byId('mi-msg').onclick = () => { closeSheet(); openMsg(); };
       byId('mi-logout').onclick = () => { closeSheet(); logout(); };
