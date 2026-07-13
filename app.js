@@ -65,7 +65,7 @@
   // Não são segredos (a API só aceita sessão válida de um email da allowlist).
   const API_BASE = 'https://relatorio-api.vercel.app';
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v36'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v37'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -485,8 +485,9 @@
         <div style="flex:1"><h1>Importar planilha</h1><span class="sub">Criar relatórios em massa</span></div>
       </header>
       <div class="screen">
-        <button type="button" class="pdf-btn" id="imp-modelo">📥 Baixar modelo (XLSX)</button>
-        <div class="hint-inline">Use o modelo — é o <b>mesmo formato</b> da planilha que o app salva no Google Drive. Preencha e envie de volta.</div>
+        <button type="button" class="btn-save" id="imp-gsheet" style="width:100%;height:54px">📗 Criar planilha no Google (editável)</button>
+        <div class="hint-inline">Cria uma planilha já no formato certo, pronta para preencher e compartilhar. <b>Não precisa ser pública</b> — o app lê direto do Drive.</div>
+        <button type="button" class="pdf-btn" id="imp-modelo" style="margin-top:12px">⬇️ Ou baixar modelo em XLSX (Excel)</button>
 
         <h2 class="panel-h">1. Escolha a planilha</h2>
         <label class="imp-file">
@@ -500,7 +501,7 @@
         <div class="field">
           <label>Link da planilha do Google</label>
           <input id="imp-url" type="url" inputmode="url" placeholder="https://docs.google.com/spreadsheets/d/..." value="${esc(imp.sheetUrl || '')}" />
-          <div class="hint-inline">A planilha precisa estar compartilhada como <b>“qualquer pessoa com o link pode ver”</b>.</div>
+          <div class="hint-inline">Planilhas criadas aqui (pasta <b>Edna App</b>) são lidas direto do Drive — <b>não precisam ser públicas</b>. Só uma planilha de fora exigiria compartilhamento por link.</div>
         </div>
 
         <button type="button" class="btn-save" id="imp-analisar" style="width:100%;height:54px;margin-top:6px" ${imp.busy ? 'disabled' : ''}>
@@ -513,6 +514,7 @@
 
     byId('btn-back').onclick = () => { state.view = 'list'; render(); };
     byId('imp-modelo').onclick = baixarModelo;
+    byId('imp-gsheet').onclick = criarPlanilhaGoogle;
     byId('imp-input').onchange = (e) => {
       const f = e.target.files && e.target.files[0];
       if (!f) return;
@@ -543,6 +545,74 @@
   }
 
   const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+  // Cria uma planilha nova e editável no Google Drive (formato certo, pronta para preencher).
+  // Compartilhar um LINK é sempre permitido pelo Chrome — ao contrário de arquivos .xlsx,
+  // que ele recusa no Web Share (o famoso NotAllowedError).
+  async function criarPlanilhaGoogle() {
+    if (!isOnline() || !sessionValid()) { toast('Conecte à internet', 'err'); return; }
+    const btn = byId('imp-gsheet');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Criando planilha...'; }
+    try {
+      const res = await fetch(apiUrl('/api/import'), {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ action: 'modelo-google' }),
+      });
+      if (res.status === 401) { refreshSession(); throw new Error('sessão expirada — faça login de novo'); }
+      const data = await res.json();
+      if (!data.ok || !data.url) throw new Error(data.error || 'não consegui criar a planilha');
+
+      state.imp.sheetUrl = data.url;   // já deixa pronta para "Analisar"
+      const copiado = await copyToClipboard(data.url);
+      mostrarPlanilhaCriada(data.url, data.name || 'Planilha', copiado);
+    } catch (e) {
+      toast('Erro: ' + e.message, 'err');
+    } finally {
+      const b = byId('imp-gsheet');
+      if (b) { b.disabled = false; b.textContent = '📗 Criar planilha no Google (editável)'; }
+    }
+  }
+
+  function mostrarPlanilhaCriada(url, nome, copiado) {
+    openSheet(`
+      <h2>Planilha criada ✓</h2>
+      <div class="file-ready">
+        <span class="fr-ico">📗</span>
+        <span class="fr-txt"><b>${esc(nome)}</b><small>no Drive, pasta “Edna App” · editável</small></span>
+      </div>
+      <p class="status-line" style="margin:-6px 0 12px">
+        ${copiado ? '🔗 Link copiado para a área de transferência.' : 'Use os botões abaixo.'}
+      </p>
+      <div class="actions">
+        <button class="secondary" id="pg-share">📤 Compartilhar link</button>
+        <button class="primary" id="pg-open" style="flex:1">Abrir planilha</button>
+      </div>
+      <div class="status-line" id="pg-status" style="margin-top:12px">
+        Preencha, volte aqui e toque em <b>Analisar planilha</b> — o link já está no campo.
+      </div>
+    `, () => {
+      const st = byId('pg-status');
+      byId('pg-open').onclick = () => window.open(url, '_blank');
+      byId('pg-share').onclick = async () => {
+        try {
+          if (navigator.share) {
+            // Compartilhar TEXTO/URL — sempre permitido (o bloqueio é só para arquivos)
+            await navigator.share({ title: nome, text: 'Planilha para preencher:', url });
+            st.textContent = '✅ Enviado.';
+            st.style.color = '#1e9e57';
+          } else {
+            const ok = await copyToClipboard(url);
+            st.textContent = ok ? '🔗 Link copiado.' : 'Não consegui copiar o link.';
+            st.style.color = ok ? '#1e9e57' : '#d10a11';
+          }
+        } catch (e) {
+          if (e && e.name === 'AbortError') { st.textContent = 'Compartilhamento cancelado.'; st.style.color = '#6b7280'; return; }
+          const ok = await copyToClipboard(url);
+          st.textContent = ok ? '🔗 Link copiado (compartilhar falhou).' : 'Falhou: ' + (e.message || '?');
+          st.style.color = ok ? '#e08a00' : '#d10a11';
+        }
+      };
+    });
+  }
 
   async function baixarModelo() {
     if (!isOnline() || !sessionValid()) { toast('Conecte à internet para baixar o modelo', 'err'); return; }
