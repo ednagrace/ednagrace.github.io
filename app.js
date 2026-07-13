@@ -24,6 +24,7 @@
       title: 'Cartão', emoji: '💳', fields: [
         { key: 'cartaoEntregas', label: 'Entregas',  emoji: '📦' },
         { key: 'cartaoReceber',  label: 'A Receber', emoji: '🕓' },
+        { key: 'cartaoAtivacao', label: 'Ativação',  emoji: '✅' },
       ]
     },
     {
@@ -43,15 +44,48 @@
   const MONTHS_SHORT = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
 
   /* ---------- Estado / armazenamento ---------- */
+  /* ---------------- Ambientes: PRODUÇÃO e TESTE ----------------
+     O app fala com uma de duas APIs. A de produção grava no banco real da Edna; a de
+     teste grava num branch do Neon — uma cópia descartável. Só o desenvolvedor troca,
+     pelo menu; a Edna nunca vê essa opção e nunca sai da produção. */
+  const ENVS = {
+    prod: {
+      label: 'Produção',
+      api: 'https://relatorio-api.vercel.app',
+    },
+    staging: {
+      label: 'Teste',
+      api: 'https://relatorio-api-git-staging-joaopauloantunes-projects.vercel.app',
+    },
+  };
+
+  // Fica FORA do namespace abaixo: precisa ser lido antes de sabermos qual é o ambiente.
+  const LS_ENV = 'edna.env';
+  function envAtual() {
+    try { return localStorage.getItem(LS_ENV) === 'staging' ? 'staging' : 'prod'; }
+    catch (e) { return 'prod'; }   // qualquer erro cai na produção, que é o normal
+  }
+  const ENV = envAtual();
+  const IS_STAGING = ENV === 'staging';
+
+  /* O armazenamento local é SEPARADO por ambiente, e isto não é cosmético.
+     O app é offline-first: ele guarda o cache de relatórios e uma FILA DE ENVIO no
+     celular. Sem separar, você entraria no teste, criaria dados de mentira, voltaria
+     para a produção — e a fila sincronizaria esses dados de mentira DENTRO do banco
+     real. Seria um jeito novo de perder dados, no lugar do antigo.
+
+     A produção mantém exatamente os nomes de chave de sempre ('edna.config', ...), então
+     ninguém é deslogado nem perde o que já estava no aparelho. */
+  const PREFIXO = IS_STAGING ? 'edna.staging.' : 'edna.';
   const LS = {
-    config:  'edna.config',
-    reports: 'edna.reports.cache',
-    queue:   'edna.queue',
-    metas:   'edna.metas',
-    session: 'edna.session',
-    settingsPending: 'edna.settingsPending',
-    templates: 'edna.templates',
-    contacts: 'edna.contacts',
+    config:  PREFIXO + 'config',
+    reports: PREFIXO + 'reports.cache',
+    queue:   PREFIXO + 'queue',
+    metas:   PREFIXO + 'metas',
+    session: PREFIXO + 'session',
+    settingsPending: PREFIXO + 'settingsPending',
+    templates: PREFIXO + 'templates',
+    contacts: PREFIXO + 'contacts',
   };
 
   // Emails autorizados (o back-end também confere — isto é só para a UX).
@@ -61,11 +95,12 @@
     'jpantunesdesouza@gmail.com',
   ];
 
-  // Configuração fixa do site (produção) — igual para qualquer navegador/aparelho.
+  // Configuração fixa do site — igual para qualquer navegador/aparelho.
   // Não são segredos (a API só aceita sessão válida de um email da allowlist).
-  const API_BASE = 'https://relatorio-api.vercel.app';
+  // O API_BASE agora vem do ambiente escolhido (produção, salvo alguém trocar no menu).
+  const API_BASE = ENVS[ENV].api;
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v38'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v39'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -246,6 +281,56 @@
   const ADMIN_EMAIL = 'jpantunesdesouza@gmail.com';
   function ehAdmin() {
     return String(state.session.email || '').toLowerCase() === ADMIN_EMAIL;
+  }
+
+  /* ---------------- Troca de ambiente (só desenvolvedor) ----------------
+     Trocar recarrega a página: o API_BASE e as chaves do localStorage são decididos
+     uma vez, na carga. Recarregar é mais simples — e mais seguro — do que tentar
+     religar tudo com o app em pé. */
+  function trocarEnv(novo) {
+    if (!ENVS[novo] || novo === ENV) return;
+    try { localStorage.setItem(LS_ENV, novo); } catch (e) {}
+    location.reload();
+  }
+
+  /* Faixa vermelha, impossível de ignorar, quando o app está no ambiente de teste.
+     Só aparece no staging — em produção o app fica exatamente como sempre foi. */
+  function mostrarBannerTeste() {
+    if (!IS_STAGING || byId('env-banner')) return;
+    const b = document.createElement('button');
+    b.id = 'env-banner';
+    b.type = 'button';
+    b.textContent = '🧪 AMBIENTE DE TESTE — banco descartável · toque para voltar à produção';
+    b.onclick = () => trocarEnv('prod');
+    document.body.insertBefore(b, document.body.firstChild);
+    // A classe também pinta o cabeçalho de âmbar. Como ele é sticky (sempre visível),
+    // o aviso continua na tela mesmo com a página rolada — a faixa sozinha sumiria.
+    document.body.classList.add('has-env-banner');
+  }
+
+  /* Confere o ambiente com a PRÓPRIA API, em vez de confiar no que o app acha que é.
+     É a mesma lição do incidente de 13/07: a configuração pode mentir; o que vale é o
+     que o código em execução responde. Se o app pensa que está no teste mas a API diz
+     'production', ele está a um clique de escrever no banco real — então voltamos para
+     a produção na marra, para que pelo menos o rótulo não minta. */
+  async function conferirAmbiente() {
+    let raiz;
+    try {
+      raiz = await (await fetch(apiUrl('/'), { cache: 'no-store' })).json();
+    } catch (e) {
+      return;   // offline: não dá para conferir, e o app é offline-first. Segue.
+    }
+    const esperado = IS_STAGING ? 'staging' : 'production';
+    if (raiz && raiz.env && raiz.env !== esperado) {
+      alert(
+        'ATENÇÃO: o app está marcado como "' + ENVS[ENV].label + '", mas a API respondeu "' +
+        raiz.env + '".\n\nPor segurança, voltando para a produção.'
+      );
+      try { localStorage.removeItem(LS_ENV); } catch (e) {}
+      location.reload();
+      return;
+    }
+    if (IS_STAGING) console.info('[ambiente] teste · API', raiz.env, '· banco', raiz.db);
   }
 
   /* Escape hatch contra cache teimoso: apaga TODOS os caches, desregistra o service
@@ -1801,6 +1886,12 @@
       ${ehAdmin() ? `<button class="menu-item" id="mi-docs">
         <span class="mi-ico">📖</span>
         <span>Documentação da API<small>Só para o desenvolvedor</small></span>
+      </button>
+      <button class="menu-item" id="mi-env">
+        <span class="mi-ico">${IS_STAGING ? '🧪' : '🚀'}</span>
+        <span>Ambiente: ${ENVS[ENV].label}<small>${IS_STAGING
+          ? 'Banco de teste — toque para voltar à produção'
+          : 'Banco real da Edna — toque para ir ao teste'}</small></span>
       </button>` : ''}
       <button class="menu-item" id="mi-logout">
         <span class="mi-ico">🚪</span>
@@ -1817,6 +1908,16 @@
       if (byId('mi-docs')) byId('mi-docs').onclick = () => {
         closeSheet();
         window.open(apiUrl('/docs?token=' + encodeURIComponent(state.session.token || '')), '_blank');
+      };
+      if (byId('mi-env')) byId('mi-env').onclick = () => {
+        const destino = IS_STAGING ? 'prod' : 'staging';
+        // Dizer em voz alta para onde se está indo. A confusão perigosa é achar que se
+        // está no teste quando se está na produção — então o aviso nomeia o banco.
+        const msg = destino === 'staging'
+          ? 'Ir para o AMBIENTE DE TESTE?\n\nO app vai passar a usar o banco de teste (descartável). Seus dados de produção no aparelho ficam guardados e intactos.'
+          : 'Voltar para a PRODUÇÃO?\n\nO app volta a usar o banco REAL da Edna. O que você criou no teste fica lá, separado.';
+        if (confirm(msg)) trocarEnv(destino);
+        else closeSheet();
       };
       byId('mi-share').onclick = () => { closeSheet(); shareToday(); };
       byId('mi-msg').onclick = () => { closeSheet(); openMsg(); };
@@ -2295,6 +2396,8 @@
 
   /* ---------------- Início ---------------- */
   function boot() {
+    mostrarBannerTeste();   // faixa vermelha se estivermos no ambiente de teste
+    conferirAmbiente();     // e a API confirma (ou desmente) que ambiente é esse
     if (sessionValid()) { render(); postAuthInit(); }
     else { showLogin(); }
   }

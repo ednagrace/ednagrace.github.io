@@ -430,3 +430,23 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 /* status badge topo direita */
 .net-badge { font-size: 11px; padding: 3px 8px; border-radius: 999px; background: rgba(255,255,255,.2); }
 .net-badge.off { background: rgba(0,0,0,.25); }
+
+/* ---------- Ambiente de teste ----------
+   Só aparece no staging. Em produção o app fica exatamente como sempre foi.
+   As listras âmbar destoam de propósito do vermelho da marca: se a faixa fosse vermelha,
+   ela se confundiria com o app e deixaria de avisar. */
+#env-banner {
+  display: block; width: 100%; border: 0; cursor: pointer;
+  font-family: inherit; font-size: 12px; font-weight: 800; line-height: 1.3;
+  color: #3b2a00; text-align: center;
+  padding: calc(env(safe-area-inset-top) + 8px) 12px 8px;
+  background: repeating-linear-gradient(45deg, #f0a52a 0 10px, var(--amber) 10px 20px);
+}
+#env-banner:active { filter: brightness(.92); }
+
+/* A faixa rola para fora da tela junto com a página. O cabeçalho, que é sticky, fica
+   sempre visível — então ele TAMBÉM vira âmbar. Assim o aviso nunca desaparece. */
+body.has-env-banner .appbar { background: var(--amber); color: #3b2a00; }
+body.has-env-banner .appbar .net-badge { background: rgba(0,0,0,.15); }
+/* o cabeçalho já está abaixo da faixa: não precisa reservar espaço para o notch de novo */
+body.has-env-banner .appbar { padding-top: 14px; }
