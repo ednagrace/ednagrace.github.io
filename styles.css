@@ -498,3 +498,12 @@ input[type="color"] {
   padding: 2px 8px; border-radius: 999px;
 }
 .col-pick.fillzero { border: none; margin-top: 4px; }
+
+/* ---------- Banner de aniversário ---------- */
+.bday-banner {
+  background: linear-gradient(120deg, #ffd75e, #ff8a3d, #ff5ea8);
+  color: #4a1030; border-radius: var(--radius); padding: 14px 16px; margin-bottom: 14px;
+  font-weight: 800; font-size: 17px; text-align: center; line-height: 1.35;
+  box-shadow: var(--shadow);
+}
+.bday-banner small { display: block; font-weight: 600; font-size: 13px; margin-top: 3px; opacity: .85; }

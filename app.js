@@ -113,7 +113,8 @@
     promotora:'Edna Grace',
     loja:     'Savegnago',
     metaDia:  3,                  // meta diária de cartões aprovados (editável)
-    headerColor: '',             // cor do cabeçalho (só produção); vazio = vermelho da marca
+    headerColor: '',             // header color (production only); empty = brand red
+    birthDate: '',               // 'YYYY-MM-DD' — promotora's date of birth
   };
 
   function load(key, fallback) {
@@ -482,6 +483,7 @@
       promotora: state.config.promotora,
       loja: state.config.loja,
       headerColor: state.config.headerColor || '',
+      birthDate: state.config.birthDate || '',
     };
   }
   // Chamado quando o usuário muda uma meta ou config: guarda pendência e tenta enviar.
@@ -513,6 +515,7 @@
         if (s.promotora) state.config.promotora = s.promotora;
         if (s.loja) state.config.loja = s.loja;
         if (typeof s.headerColor !== 'undefined') state.config.headerColor = s.headerColor;
+        if (typeof s.birthDate !== 'undefined') state.config.birthDate = s.birthDate;
         save(LS.config, state.config);
         aplicarCorCabecalho();   // a cor pode ter mudado em outro aparelho
         render();
@@ -1008,6 +1011,7 @@
       </header>
 
       <div class="screen">
+        ${isBirthday() ? `<div class="bday-banner">🎉🎂 Feliz aniversário, ${esc((state.config.promotora || '').split(' ')[0] || 'promotora')}!<small>${ageToday() != null ? ageToday() + ' anos hoje — o' : 'O'} app não esqueceu de você 💛</small></div>` : ''}
         <div class="meta-card">
           <div class="row">
             <span class="label">Meta do mês · aprovados</span>
@@ -2062,6 +2066,11 @@
         <label>Meta do dia (cartões aprovados)</label>
         <input id="c-metadia" type="number" inputmode="numeric" min="0" value="${esc(c.metaDia != null ? c.metaDia : 3)}" />
       </div>
+      <div class="field">
+        <label>🎂 Data de nascimento da promotora</label>
+        <input id="c-birth" type="date" value="${/^\d{4}-\d{2}-\d{2}$/.test(c.birthDate || '') ? esc(c.birthDate) : ''}" max="${todayISO()}" />
+        <div class="status-line">O app dá os parabéns no dia do aniversário.</div>
+      </div>
       ${IS_STAGING ? `
       <div class="field">
         <label>Cor do cabeçalho</label>
@@ -2110,6 +2119,8 @@
         state.config.promotora = byId('c-prom').value.trim() || 'Edna Grace';
         state.config.loja      = byId('c-loja').value.trim() || 'Savegnago';
         state.config.metaDia   = Math.max(0, Number(byId('c-metadia').value) || 3);
+        const dob = byId('c-birth').value;   // 'YYYY-MM-DD' or ''
+        state.config.birthDate = /^\d{4}-\d{2}-\d{2}$/.test(dob) ? dob : '';
         if (!IS_STAGING) state.config.headerColor = (corEscolhida === DEFAULT_HEADER) ? '' : corEscolhida;
         save(LS.config, state.config);
         saveSettingsRemote();          // salva no Neon (compartilhado)
@@ -2543,6 +2554,20 @@
   }
   // True when the field carries a real number (as opposed to N/A).
   function informed(v) { return typeof v === 'number' && Number.isFinite(v); }
+
+  // Birth date is stored as 'YYYY-MM-DD'. It's a birthday when day/month match today.
+  function isBirthday() {
+    const dob = state.config.birthDate;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dob || '')) return false;
+    const now = new Date();
+    return dob.slice(5) === pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+  }
+  // Age turned today (only meaningful when isBirthday()).
+  function ageToday() {
+    const dob = state.config.birthDate;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dob || '')) return null;
+    return new Date().getFullYear() - Number(dob.slice(0, 4));
+  }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
     ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
   function weekday(d) {
