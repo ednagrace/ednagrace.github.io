@@ -54,7 +54,8 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 
 .appbar {
   position: sticky; top: 0; z-index: 20;
-  background: var(--red);
+  /* Cor escolhida na config (produção). No teste, o body.has-env-banner força âmbar abaixo. */
+  background: var(--header-color, var(--red));
   color: #fff;
   padding: calc(env(safe-area-inset-top) + 14px) 16px 14px;
   display: flex; align-items: center; gap: 12px;
@@ -214,6 +215,14 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
   min-width: 58px; text-align: center; font-size: 30px; font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
+.stepper .val.na { color: var(--muted); font-weight: 700; }
+/* Botão N/A: menor que os do stepper, discreto até estar ativo. */
+.stepper .na-btn {
+  width: auto; min-width: 44px; height: var(--tap); padding: 0 10px;
+  font-size: 14px; font-weight: 800; border-radius: 12px;
+  background: #eef0f3; color: var(--muted);
+}
+.stepper .na-btn.active { background: var(--ink); color: #fff; }
 
 /* colunas definidas no JS (grid-template-columns inline) conforme a largura da tela */
 .quick { display: grid; gap: 7px; margin-top: 12px; }
@@ -450,3 +459,42 @@ body.has-env-banner .appbar { background: var(--amber); color: #3b2a00; }
 body.has-env-banner .appbar .net-badge { background: rgba(0,0,0,.15); }
 /* o cabeçalho já está abaixo da faixa: não precisa reservar espaço para o notch de novo */
 body.has-env-banner .appbar { padding-top: 14px; }
+
+/* ---------- Seletor de cor do cabeçalho (config) ---------- */
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.swatch {
+  width: 38px; height: 38px; border-radius: 10px; border: 2px solid var(--line);
+  cursor: pointer; padding: 0; position: relative;
+}
+.swatch.sel { border-color: var(--ink); box-shadow: 0 0 0 2px #fff inset; }
+.swatch.sel::after {
+  content: '✓'; position: absolute; inset: 0; display: flex; align-items: center;
+  justify-content: center; color: #fff; font-weight: 800; font-size: 16px;
+  text-shadow: 0 1px 2px rgba(0,0,0,.5);
+}
+input[type="color"] {
+  width: 46px; height: 34px; padding: 0; border: 1px solid var(--line);
+  border-radius: 8px; background: none; cursor: pointer;
+}
+.status-line.warn { color: var(--red-dark); font-weight: 600; }
+
+/* ---------- Seleção de colunas da planilha ---------- */
+.col-actions { display: flex; gap: 8px; margin-bottom: 10px; }
+.chip-btn {
+  border: 1px solid var(--line); background: #fff; color: var(--ink);
+  border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.chip-btn:active { background: var(--bg); }
+.col-list { max-height: 46vh; overflow-y: auto; margin-bottom: 12px; }
+.col-pick {
+  display: flex; align-items: center; gap: 10px; padding: 11px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.col-pick input[type="checkbox"] { width: 22px; height: 22px; flex: none; accent-color: var(--red); }
+.col-pick .col-name { flex: 1; font-size: 15px; }
+.col-pick .col-name small { color: var(--muted); font-weight: 400; }
+.col-pick .col-tag {
+  font-size: 11px; color: var(--muted); background: var(--bg);
+  padding: 2px 8px; border-radius: 999px;
+}
+.col-pick.fillzero { border: none; margin-top: 4px; }

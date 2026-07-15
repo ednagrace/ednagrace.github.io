@@ -8,11 +8,17 @@
   /* ---------- Definição dos campos do relatório ---------- */
   const GROUPS = [
     {
+      title: 'Abordagem', emoji: '👥', fields: [
+        { key: 'clientesAbordados', label: 'Clientes Abordados', emoji: '👥' },
+      ]
+    },
+    {
       title: 'Propostas', emoji: '📋', fields: [
-        { key: 'aprovadas',  label: 'Aprovadas',  emoji: '✅', dailyMeta: true },
-        { key: 'reprovadas', label: 'Reprovadas', emoji: '❌' },
-        { key: 'analise',    label: 'Em Análise', emoji: '🔍' },
-        { key: 'pendencias', label: 'Pendências', emoji: '⏳' },
+        { key: 'aprovadas',  label: 'Aprovadas',   emoji: '✅', dailyMeta: true },
+        { key: 'preAprovado',label: 'Pré-Aprovado',emoji: '🟡' },
+        { key: 'reprovadas', label: 'Reprovadas',  emoji: '❌' },
+        { key: 'analise',    label: 'Em Análise',  emoji: '🔍' },
+        { key: 'pendencias', label: 'Pendências',  emoji: '⏳' },
       ]
     },
     {
@@ -100,13 +106,14 @@
   // O API_BASE agora vem do ambiente escolhido (produção, salvo alguém trocar no menu).
   const API_BASE = ENVS[ENV].api;
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v39'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v41'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
     promotora:'Edna Grace',
     loja:     'Savegnago',
     metaDia:  3,                  // meta diária de cartões aprovados (editável)
+    headerColor: '',             // cor do cabeçalho (só produção); vazio = vermelho da marca
   };
 
   function load(key, fallback) {
@@ -333,6 +340,65 @@
     if (IS_STAGING) console.info('[ambiente] teste · API', raiz.env, '· banco', raiz.db);
   }
 
+  /* ---------------- Cor do cabeçalho (só PRODUÇÃO) ----------------
+     A cor fica salva no banco (settings), então é a mesma em todos os aparelhos.
+     O ambiente de TESTE não escolhe cor: é sempre âmbar, para nunca se confundir com a
+     produção. Por isso não há checagem entre ambientes — a única regra é "produção não
+     pode ser âmbar", garantida por validarCorCabecalho. */
+  const HEADER_PALETTE = [
+    { nome: 'Vermelho', cor: '#d10a11' },
+    { nome: 'Azul',     cor: '#1b52c0' },
+    { nome: 'Verde',    cor: '#1e7d45' },
+    { nome: 'Teal',     cor: '#0f6f7f' },
+    { nome: 'Roxo',     cor: '#6a2fb5' },
+    { nome: 'Magenta',  cor: '#b02a6b' },
+    { nome: 'Grafite',  cor: '#37414f' },
+  ];
+  const DEFAULT_HEADER = '#d10a11';   // vermelho da marca
+  const TEST_AMBER = '#e08a00';
+
+  function hexToRgb(hex) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+    if (!m) return null;
+    const n = parseInt(m[1], 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }
+  function relLum({ r, g, b }) {
+    const f = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  }
+  function hueOf({ r, g, b }) {
+    r /= 255; g /= 255; b /= 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    if (d === 0) return 0;
+    let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return (h * 60 + 360) % 360;
+  }
+  // null = ok; senão, o motivo (para mostrar ao usuário).
+  function validarCorCabecalho(hex) {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return 'cor inválida';
+    // Texto do cabeçalho é branco: exige contraste AA (≥ 4.5) para não sumir.
+    if (1.05 / (relLum(rgb) + 0.05) < 4.5) return 'clara demais — o texto branco do cabeçalho fica ilegível';
+    // Faixa de matiz laranja/âmbar/amarelo: reservada ao ambiente de teste.
+    const h = hueOf(rgb);
+    if (h >= 30 && h <= 70) return 'parecida com o âmbar do ambiente de teste — escolha outra família de cor';
+    return null;
+  }
+  // A cor que o cabeçalho deve ter agora. No teste, null (o CSS força âmbar).
+  function corCabecalho() {
+    if (IS_STAGING) return null;
+    const c = state.config.headerColor;
+    return (c && !validarCorCabecalho(c)) ? c : DEFAULT_HEADER;
+  }
+  function aplicarCorCabecalho() {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (IS_STAGING) { if (meta) meta.setAttribute('content', TEST_AMBER); return; }
+    const c = corCabecalho();
+    document.documentElement.style.setProperty('--header-color', c);
+    if (meta) meta.setAttribute('content', c);
+  }
+
   /* Escape hatch contra cache teimoso: apaga TODOS os caches, desregistra o service
      worker e recarrega com cache-buster. A sessão e os dados locais são preservados
      (ficam no localStorage, que não é tocado). */
@@ -415,6 +481,7 @@
       metaDia: Number(state.config.metaDia) || 3,
       promotora: state.config.promotora,
       loja: state.config.loja,
+      headerColor: state.config.headerColor || '',
     };
   }
   // Chamado quando o usuário muda uma meta ou config: guarda pendência e tenta enviar.
@@ -445,7 +512,9 @@
         if (typeof s.metaDia !== 'undefined') state.config.metaDia = Number(s.metaDia) || 0;
         if (s.promotora) state.config.promotora = s.promotora;
         if (s.loja) state.config.loja = s.loja;
+        if (typeof s.headerColor !== 'undefined') state.config.headerColor = s.headerColor;
         save(LS.config, state.config);
+        aplicarCorCabecalho();   // a cor pode ter mudado em outro aparelho
         render();
       }
     } catch (e) {}
@@ -843,7 +912,13 @@
   function monthTotals(monthKey) {
     const rows = monthReports(monthKey);
     const t = {};
-    NUMERIC_KEYS.forEach(k => t[k] = rows.reduce((s, r) => s + (Number(r[k]) || 0), 0));
+    // Soma só os valores informados. Se NINGUÉM informou o campo no mês, o total é N/A (null),
+    // não 0 — o painel mostra "—".
+    NUMERIC_KEYS.forEach(k => {
+      let s = 0, any = false;
+      rows.forEach(r => { if (informed(r[k])) { s += r[k]; any = true; } });
+      t[k] = any ? s : null;
+    });
     t._dias = rows.length;
     return t;
   }
@@ -955,6 +1030,8 @@
           <button id="next-month" aria-label="Próximo mês">›</button>
         </div>
 
+        <button type="button" class="pdf-btn" id="btn-sheet-month">📗 Planilha do Google · ${MONTHS[m-1]} ${y}</button>
+
         <div class="search">
           <input id="search" type="search" inputmode="search" placeholder="Buscar por data ou observação" value="${esc(state.search)}" />
         </div>
@@ -975,6 +1052,8 @@
     byId('next-month').onclick = () => shiftMonth(1);
     byId('btn-menu').onclick = openMenu;
     byId('btn-panel').onclick = openPanel;
+    // A planilha sai do mês que está no seletor acima — o mesmo mês cuja lista está na tela.
+    byId('btn-sheet-month').onclick = () => generateSheet(monthKey);
     byId('btn-meta').onclick = editMetaPrompt;
     byId('btn-meta-dia').onclick = editMetaDiaPrompt;
     const s = byId('search');
@@ -1111,9 +1190,9 @@
     const d = parseISO(r.data);
     const totalProp = (Number(r.aprovadas)||0) + (Number(r.reprovadas)||0);
     const chips = [];
-    const bateuDia = num(r.aprovadas) >= metaDiaVal();
-    chips.push(`<span class="chip ${bateuDia ? 'ok' : 'neutral'}">✅ ${num(r.aprovadas)}${bateuDia ? ' 🎯' : ''}</span>`);
-    chips.push(`<span class="chip no">❌ ${num(r.reprovadas)}</span>`);
+    const bateuDia = informed(r.aprovadas) && r.aprovadas >= metaDiaVal();
+    chips.push(`<span class="chip ${bateuDia ? 'ok' : 'neutral'}">✅ ${fmtNA(r.aprovadas)}${bateuDia ? ' 🎯' : ''}</span>`);
+    chips.push(`<span class="chip no">❌ ${fmtNA(r.reprovadas)}</span>`);
     if (num(r.link))  chips.push(`<span class="chip">🔗 ${num(r.link)}</span>`);
     if (num(r.cartaoEntregas)) chips.push(`<span class="chip">📦 ${num(r.cartaoEntregas)}</span>`);
     const servicos = num(r.sms)+num(r.bonus)+num(r.faturaDigital)+num(r.odontoPlus);
@@ -1204,17 +1283,17 @@
     const [y, m] = monthKey.split('-').map(Number);
     const t = monthTotals(monthKey);
     const meta = metaFor(monthKey);
-    const feitas = t.aprovadas;
+    const feitas = t.aprovadas || 0;   // N/A conta como 0 na barra de meta
     const pct = meta > 0 ? Math.min(100, Math.round((feitas / meta) * 100)) : 0;
     const weeks = weeklyBreakdown(monthKey);
     const maxAp = Math.max(1, ...weeks.map(w => w.aprovadas));
 
-    // Gráfico de pizza (donut) — propostas por situação (cores validadas)
+    // Gráfico de pizza (donut) — propostas por situação (cores validadas). N/A entra como 0.
     const propSegs = [
-      { label: 'Aprovadas', value: t.aprovadas, color: '#0ca30c' },
-      { label: 'Reprovadas', value: t.reprovadas, color: '#d03b3b' },
-      { label: 'Em Análise', value: t.analise, color: '#c98500' },
-      { label: 'Pendências', value: t.pendencias, color: '#e0662f' },
+      { label: 'Aprovadas', value: t.aprovadas || 0, color: '#0ca30c' },
+      { label: 'Reprovadas', value: t.reprovadas || 0, color: '#d03b3b' },
+      { label: 'Em Análise', value: t.analise || 0, color: '#c98500' },
+      { label: 'Pendências', value: t.pendencias || 0, color: '#e0662f' },
     ];
     const propTotal = propSegs.reduce((s, x) => s + x.value, 0);
     const legend = propSegs.map(s => `
@@ -1227,7 +1306,7 @@
     const tiles = ALL_FIELDS.map(f => `
       <div class="stat-tile">
         <div class="st-emoji">${f.emoji}</div>
-        <div class="st-num">${t[f.key]}</div>
+        <div class="st-num">${fmtNA(t[f.key])}</div>
         <div class="st-label">${f.label}</div>
       </div>`).join('');
 
@@ -1633,7 +1712,9 @@
       metaMes: metaFor(monthKeyOf(dataISO)),
       obs: '',
     };
-    NUMERIC_KEYS.forEach(k => r[k] = 0);
+    // A new report starts with every field NOT INFORMED (N/A), not 0. Typing 0 is a
+    // deliberate choice; leaving a field untouched keeps it N/A.
+    NUMERIC_KEYS.forEach(k => r[k] = null);
     return r;
   }
 
@@ -1642,7 +1723,7 @@
     const groupsHTML = GROUPS.map(g => `
       <div class="group">
         <h2><span>${g.emoji}</span> ${g.title}</h2>
-        ${g.fields.map(f => counterHTML(f, r[f.key] || 0)).join('')}
+        ${g.fields.map(f => counterHTML(f, r[f.key])).join('')}
       </div>`).join('');
 
     app.innerHTML = `
@@ -1752,9 +1833,10 @@
   function counterHTML(f, val) {
     const cols = quickCols();
     const maxN = cols * QUICK_ROWS - 1;   // ex.: 5 colunas → 0..14
+    const na = !informed(val);            // N/A quando o valor não é um número
     const quick = [];
     for (let n = 0; n <= maxN; n++) {
-      quick.push(`<button type="button" data-q="${f.key}" data-n="${n}" class="${Number(val) === n ? 'active' : ''}">${n}</button>`);
+      quick.push(`<button type="button" data-q="${f.key}" data-n="${n}" class="${val === n ? 'active' : ''}">${n}</button>`);
     }
     return `
       <div class="counter" id="counter-${f.key}">
@@ -1762,45 +1844,73 @@
           <div class="name"><span class="emoji">${f.emoji}</span> ${f.label}</div>
           <div class="stepper">
             <button type="button" class="minus" data-step="${f.key}" data-d="-1">−</button>
-            <div class="val" id="val-${f.key}">${Number(val) || 0}</div>
+            <input class="val-input ${na ? 'na' : ''}" id="val-${f.key}" type="text"
+              inputmode="numeric" pattern="[0-9]*" placeholder="—" aria-label="${f.label}"
+              value="${informed(val) ? val : ''}" />
             <button type="button" class="plus" data-step="${f.key}" data-d="1">＋</button>
           </div>
         </div>
         <div class="quick" style="grid-template-columns: repeat(${cols}, 1fr)">${quick.join('')}</div>
-        ${f.dailyMeta ? `<div class="daily-hint ${Number(val) >= metaDiaVal() ? 'hit' : ''}" id="dhint-${f.key}">${dailyHintText(val)}</div>` : ''}
+        ${f.dailyMeta ? `<div class="daily-hint ${informed(val) && val >= metaDiaVal() ? 'hit' : ''}" id="dhint-${f.key}">${dailyHintText(val)}</div>` : ''}
       </div>`;
   }
 
   function dailyHintText(val) {
     const md = metaDiaVal();
-    const n = Number(val) || 0;
-    return n >= md ? `🎯 Meta do dia batida! (${n}/${md})` : `🎯 Meta do dia: ${n} / ${md}`;
+    if (!informed(val)) return `🎯 Meta do dia: — / ${md}`;
+    return val >= md ? `🎯 Meta do dia batida! (${val}/${md})` : `🎯 Meta do dia: ${val} / ${md}`;
   }
 
   function wireCounter(f, r) {
     const container = byId('counter-' + f.key);
-    const valEl = byId('val-' + f.key);
+    const input = byId('val-' + f.key);
 
-    function set(n) {
-      n = Math.max(0, n);
-      r[f.key] = n;
-      valEl.textContent = n;
-      // destaca botão rápido correspondente
+    // Atualiza os destaques (botões rápidos, meta do dia) a partir do estado — sem mexer
+    // no texto do input, para não atrapalhar o cursor enquanto a pessoa digita.
+    function reflect() {
+      const v = r[f.key];
+      const na = !informed(v);
+      input.classList.toggle('na', na);
       container.querySelectorAll('.quick button').forEach(b => {
-        b.classList.toggle('active', Number(b.getAttribute('data-n')) === n);
+        b.classList.toggle('active', !na && Number(b.getAttribute('data-n')) === v);
       });
-      // atualiza o indicador da meta do dia (só na Aprovadas)
       if (f.dailyMeta) {
         const dh = byId('dhint-' + f.key);
-        if (dh) { dh.textContent = dailyHintText(n); dh.classList.toggle('hit', n >= metaDiaVal()); }
+        if (dh) { dh.textContent = dailyHintText(v); dh.classList.toggle('hit', informed(v) && v >= metaDiaVal()); }
       }
     }
+    // n === null => N/A; número => valor. Também escreve no input (botões e steppers usam).
+    function set(n) {
+      r[f.key] = (n === null) ? null : Math.max(0, n);
+      input.value = (r[f.key] === null) ? '' : String(r[f.key]);
+      reflect();
+    }
+
+    // Digitação livre: só dígitos; apagar tudo = N/A (null). Não reescreve o input aqui.
+    input.oninput = () => {
+      const digits = input.value.replace(/\D/g, '');
+      if (digits !== input.value) input.value = digits;   // remove qualquer caractere não numérico
+      r[f.key] = digits === '' ? null : parseInt(digits, 10);
+      reflect();
+    };
 
     container.querySelectorAll('.quick button').forEach(b => {
-      b.onclick = () => { set(Number(b.getAttribute('data-n'))); haptic(); };
+      b.onclick = () => {
+        const n = Number(b.getAttribute('data-n'));
+        // Tocar de novo no número já selecionado desmarca (volta para N/A).
+        set(r[f.key] === n ? null : n);
+        haptic();
+      };
     });
     container.querySelectorAll('[data-step]').forEach(b => {
-      b.onclick = () => { set((Number(r[f.key]) || 0) + Number(b.getAttribute('data-d'))); haptic(); };
+      b.onclick = () => {
+        const d = Number(b.getAttribute('data-d'));
+        const cur = r[f.key];
+        // ＋ a partir de N/A começa em 0; − no 0 (ou em N/A) volta para N/A.
+        if (!informed(cur)) set(d > 0 ? 0 : null);
+        else set(cur + d < 0 ? null : cur + d);
+        haptic();
+      };
     });
   }
 
@@ -1815,7 +1925,7 @@
     r.promotora = state.config.promotora;
     r.loja = state.config.loja;
     r.metaMes = metaFor(monthKeyOf(r.data));
-    NUMERIC_KEYS.forEach(k => r[k] = Number(r[k]) || 0);
+    NUMERIC_KEYS.forEach(k => r[k] = numOrNull(r[k]));   // preserva N/A (não força 0)
 
     const btn = byId('btn-save');
     btn.disabled = true; btn.textContent = 'Salvando...';
@@ -1861,7 +1971,7 @@
       </button>
       <button class="menu-item" id="mi-sheet">
         <span class="mi-ico">📗</span>
-        <span>Gerar planilha do Google<small>Salva no Drive e compartilha</small></span>
+        <span>Gerar planilha do Google<small>${MONTHS[Number(state.month.split('-')[1]) - 1]} ${state.month.split('-')[0]} — o mês selecionado na tela inicial</small></span>
       </button>
       <button class="menu-item" id="mi-import">
         <span class="mi-ico">📥</span>
@@ -1952,50 +2062,145 @@
         <label>Meta do dia (cartões aprovados)</label>
         <input id="c-metadia" type="number" inputmode="numeric" min="0" value="${esc(c.metaDia != null ? c.metaDia : 3)}" />
       </div>
+      ${IS_STAGING ? `
+      <div class="field">
+        <label>Cor do cabeçalho</label>
+        <div class="status-line">No ambiente de teste o cabeçalho é sempre âmbar, para não se confundir com a produção.</div>
+      </div>` : `
+      <div class="field">
+        <label>Cor do cabeçalho</label>
+        <div class="swatches" id="c-swatches">
+          ${HEADER_PALETTE.map((p) => `<button type="button" class="swatch${(corCabecalho() === p.cor) ? ' sel' : ''}" data-cor="${p.cor}" style="background:${p.cor}" title="${p.nome}" aria-label="${p.nome}"></button>`).join('')}
+        </div>
+        <div class="row" style="margin-top:8px;align-items:center;gap:10px">
+          <input id="c-cor-livre" type="color" value="${esc(corCabecalho())}" aria-label="Cor personalizada" />
+          <span class="status-line" id="c-cor-msg">ou escolha uma cor personalizada</span>
+        </div>
+      </div>`}
       <div class="actions">
         <button class="primary" id="c-save" style="flex:1">Salvar</button>
       </div>
       <button type="button" class="pdf-btn btn-wpp" id="c-suporte" style="margin-top:16px">💬 Falar no WhatsApp (suporte)</button>
     `, () => {
       byId('c-suporte').onclick = () => openSuporteWhatsApp();
+
+      // Cor do cabeçalho (só produção). Guarda a escolha atual e valida na hora.
+      let corEscolhida = corCabecalho();
+      if (!IS_STAGING) {
+        const msg = byId('c-cor-msg');
+        const marcarSwatch = (cor) => {
+          document.querySelectorAll('#c-swatches .swatch').forEach((b) =>
+            b.classList.toggle('sel', b.getAttribute('data-cor') === cor));
+        };
+        const tentar = (cor) => {
+          const erro = validarCorCabecalho(cor);
+          if (erro) { msg.textContent = '⚠ ' + erro; msg.classList.add('warn'); return false; }
+          corEscolhida = cor;
+          msg.textContent = 'cor aplicada ao salvar';
+          msg.classList.remove('warn');
+          return true;
+        };
+        document.querySelectorAll('#c-swatches .swatch').forEach((b) => {
+          b.onclick = () => { const cor = b.getAttribute('data-cor'); if (tentar(cor)) marcarSwatch(cor); byId('c-cor-livre').value = cor; };
+        });
+        byId('c-cor-livre').oninput = (e) => { if (tentar(e.target.value)) marcarSwatch(e.target.value); };
+      }
+
       byId('c-save').onclick = () => {
         state.config.promotora = byId('c-prom').value.trim() || 'Edna Grace';
         state.config.loja      = byId('c-loja').value.trim() || 'Savegnago';
         state.config.metaDia   = Math.max(0, Number(byId('c-metadia').value) || 3);
+        if (!IS_STAGING) state.config.headerColor = (corEscolhida === DEFAULT_HEADER) ? '' : corEscolhida;
         save(LS.config, state.config);
         saveSettingsRemote();          // salva no Neon (compartilhado)
+        aplicarCorCabecalho();
         closeSheet();
+        render();
         toast('Configurações salvas ✓', 'ok');
       };
     });
   }
 
   /* ---------------- Exportações ---------------- */
-  // Gera/atualiza a planilha do Google no Drive do gerente, copia o link e mostra opções.
-  async function generateSheet() {
+  // Abre a seleção de colunas antes de gerar a planilha. O mês vem de quem chamou.
+  function generateSheet(month) {
+    const alvo = month || state.month;
+    const [y, m] = alvo.split('-').map(Number);
+    const rows = monthReports(alvo);
+    if (!rows.length) { toast('Nenhum relatório neste mês', 'err'); return; }
+
+    // Uma coluna com pelo menos um valor informado no mês vem marcada; 100% N/A vem
+    // desmarcada (auto-esconde). Mas dá para marcar/desmarcar qualquer uma.
+    const temDado = (k) => rows.some(r => informed(r[k]));
+    const linhas = ALL_FIELDS.map(f => `
+      <label class="col-pick">
+        <input type="checkbox" data-col="${f.key}" ${temDado(f.key) ? 'checked' : ''} />
+        <span class="col-name">${f.emoji} ${f.label}</span>
+        ${temDado(f.key) ? '' : '<span class="col-tag">sem dados</span>'}
+      </label>`).join('');
+
+    openSheet(`
+      <h2>Planilha de ${MONTHS[m-1]} ${y}</h2>
+      <p class="status-line" style="margin:-4px 0 10px">Escolha as colunas. As sem dados no mês já vêm desmarcadas.</p>
+      <div class="col-actions">
+        <button type="button" class="chip-btn" id="col-all">Marcar todas</button>
+        <button type="button" class="chip-btn" id="col-def">Só as com dados</button>
+      </div>
+      <div class="col-list">${linhas}</div>
+      <label class="col-pick fillzero">
+        <input type="checkbox" id="col-fillzero" />
+        <span class="col-name">Preencher vazios com 0 <small>(só nesta planilha; não muda os dados)</small></span>
+      </label>
+      <div class="actions">
+        <button class="primary" id="col-gerar" style="flex:1">📊 Gerar planilha</button>
+      </div>
+    `, () => {
+      const inputs = () => Array.from(document.querySelectorAll('.col-list input[data-col]'));
+      byId('col-all').onclick = () => inputs().forEach(i => { i.checked = true; });
+      byId('col-def').onclick = () => inputs().forEach(i => { i.checked = temDado(i.getAttribute('data-col')); });
+      byId('col-gerar').onclick = () => {
+        const fields = inputs().filter(i => i.checked).map(i => i.getAttribute('data-col'));
+        if (!fields.length) { toast('Escolha ao menos uma coluna', 'err'); return; }
+        const fillZero = byId('col-fillzero').checked;
+        closeSheet();
+        doGenerateSheet(alvo, fields, fillZero);
+      };
+    });
+  }
+
+  // Chama a API já com a seleção de colunas e a opção de preencher vazios com 0.
+  async function doGenerateSheet(month, fields, fillZero) {
     if (!isOnline() || !sessionValid()) { toast('Conecte à internet', 'err'); return; }
     toast('Gerando planilha...');
     try {
       const res = await fetch(apiUrl('/api/sheet'), {
-        method: 'POST', headers: authHeaders(), body: JSON.stringify({ month: state.month }),
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ month, fields, fillZero }),
       });
       if (res.status === 401) { refreshSession(); toast('Faça login novamente', 'err'); return; }
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || 'falha');
       const copied = await copyToClipboard(data.url);
-      showSheetLink(data.url, copied);
+      showSheetLink(data.url, copied, month);
     } catch (e) {
       toast('Erro ao gerar planilha: ' + e.message, 'err');
     }
   }
 
-  function showSheetLink(url, copied) {
+  function showSheetLink(url, copied, month) {
+    const [y, m] = String(month || state.month).split('-').map(Number);
     openSheet(`
-      <h2>Planilha pronta ✓</h2>
+      <h2>Planilha de ${MONTHS[m-1]} ${y} ✓</h2>
       <p class="status-line" style="margin:-4px 0 12px">${copied ? '🔗 Link copiado para a área de transferência.' : 'Toque em “Copiar link” abaixo.'}</p>
       <div class="field">
         <input id="sheet-url" type="text" readonly value="${esc(url)}" onclick="this.select()" />
       </div>
+      <p class="status-line" style="margin:12px 0 0">
+        ⏳ <b>Esta planilha é temporária</b> e some do Drive depois de alguns dias.
+        Os dados ficam sempre aqui no app — é só gerar de novo quando precisar.<br><br>
+        📌 <b>Quer guardar?</b> Abra a planilha e use <b>Arquivo → Fazer uma cópia</b>.
+        A cópia vai para o <b>seu</b> Drive e essa <b>não é apagada</b>.
+      </p>
       <div class="actions">
         <button class="secondary" id="sheet-copy">📋 Copiar link</button>
         <button class="primary" id="sheet-open">Abrir planilha</button>
@@ -2035,10 +2240,11 @@
     let txt = `📋 *Relatório Diário — ${state.config.loja}*\n`;
     txt += `👤 ${state.config.promotora}\n`;
     txt += `📅 ${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}\n\n`;
-    txt += `*Propostas*\n✅ Aprovadas: ${num(r.aprovadas)}\n❌ Reprovadas: ${num(r.reprovadas)}\n🔍 Em análise: ${num(r.analise)}\n⏳ Pendências: ${num(r.pendencias)}\n\n`;
-    txt += `🔗 Link: ${num(r.link)}\n`;
-    txt += `💳 Cartão — 📦 Entregas: ${num(r.cartaoEntregas)} | 🕓 A receber: ${num(r.cartaoReceber)}\n\n`;
-    txt += `*Serviços*\n💬 SMS: ${num(r.sms)}\n🎁 Bônus: ${num(r.bonus)}\n📄 Fatura Digital: ${num(r.faturaDigital)}\n🦷 Odonto Plus: ${num(r.odontoPlus)}\n`;
+    txt += `👥 Clientes abordados: ${fmtNA(r.clientesAbordados)}\n\n`;
+    txt += `*Propostas*\n✅ Aprovadas: ${fmtNA(r.aprovadas)}\n🟡 Pré-aprovado: ${fmtNA(r.preAprovado)}\n❌ Reprovadas: ${fmtNA(r.reprovadas)}\n🔍 Em análise: ${fmtNA(r.analise)}\n⏳ Pendências: ${fmtNA(r.pendencias)}\n\n`;
+    txt += `🔗 Link: ${fmtNA(r.link)}\n`;
+    txt += `💳 Cartão — 📦 Entregas: ${fmtNA(r.cartaoEntregas)} | 🕓 A receber: ${fmtNA(r.cartaoReceber)} | ✅ Ativação: ${fmtNA(r.cartaoAtivacao)}\n\n`;
+    txt += `*Serviços*\n💬 SMS: ${fmtNA(r.sms)}\n🎁 Bônus: ${fmtNA(r.bonus)}\n📄 Fatura Digital: ${fmtNA(r.faturaDigital)}\n🦷 Odonto Plus: ${fmtNA(r.odontoPlus)}\n`;
     if (r.obs) txt += `\n🗒️ Obs: ${r.obs}\n`;
     if (meta) txt += `\n🎯 Meta do mês: ${feitas}/${meta} aprovados\n`;
 
@@ -2097,28 +2303,12 @@
       y -= 21;
     };
 
-    section('Propostas');
-    row('Aprovadas', num(r.aprovadas));
-    row('Reprovadas', num(r.reprovadas));
-    row('Em Análise', num(r.analise));
-    row('Pendências', num(r.pendencias));
-    y -= 6;
-
-    section('Links');
-    row('Links', num(r.link));
-    y -= 6;
-
-    section('Cartão');
-    row('Entregas', num(r.cartaoEntregas));
-    row('A Receber (retirada na loja)', num(r.cartaoReceber));
-    y -= 6;
-
-    section('Serviços');
-    row('SMS', num(r.sms));
-    row('Bônus', num(r.bonus));
-    row('Fatura Digital', num(r.faturaDigital));
-    row('Odonto Plus', num(r.odontoPlus));
-    y -= 6;
+    // Seções vêm dos GROUPS: qualquer campo novo entra sozinho. N/A aparece como "—".
+    GROUPS.forEach(g => {
+      section(g.title);
+      g.fields.forEach(f => row(f.label, fmtNA(r[f.key])));
+      y -= 6;
+    });
 
     section('Metas');
     const md = metaDiaVal();
@@ -2169,7 +2359,7 @@
 
   function sharePDF(r) {
     if (!r || !r.data) { toast('Nenhum relatório para gerar PDF', 'err'); return; }
-    NUMERIC_KEYS.forEach(k => r[k] = Number(r[k]) || 0);
+    NUMERIC_KEYS.forEach(k => r[k] = numOrNull(r[k]));
     const blob = buildReportPDF(r);
     const primeiroNome = (r.promotora || 'Edna').split(' ')[0];
     const fname = 'Relatorio_' + r.data + '_' + primeiroNome + '.pdf';
@@ -2227,13 +2417,13 @@
     const [y, m] = monthKey.split('-').map(Number);
     const t = monthTotals(monthKey);
     const meta = metaFor(monthKey);
-    const pct = meta > 0 ? Math.round((t.aprovadas / meta) * 100) : 0;
+    const pct = meta > 0 ? Math.round(((t.aprovadas || 0) / meta) * 100) : 0;
     const weeks = weeklyBreakdown(monthKey);
     const PIE = [
-      { label: 'Aprovadas', value: t.aprovadas, color: [0.047, 0.639, 0.047] },
-      { label: 'Reprovadas', value: t.reprovadas, color: [0.816, 0.231, 0.231] },
-      { label: 'Em Análise', value: t.analise, color: [0.788, 0.522, 0.000] },
-      { label: 'Pendências', value: t.pendencias, color: [0.878, 0.400, 0.184] },
+      { label: 'Aprovadas', value: t.aprovadas || 0, color: [0.047, 0.639, 0.047] },
+      { label: 'Reprovadas', value: t.reprovadas || 0, color: [0.816, 0.231, 0.231] },
+      { label: 'Em Análise', value: t.analise || 0, color: [0.788, 0.522, 0.000] },
+      { label: 'Pendências', value: t.pendencias || 0, color: [0.878, 0.400, 0.184] },
     ];
     const pieTotal = PIE.reduce((s, x) => s + x.value, 0);
 
@@ -2276,7 +2466,7 @@
       yy = cy - R - 18;
 
       section('Totais do mês');
-      ALL_FIELDS.forEach(f => row(f.label, t[f.key]));
+      ALL_FIELDS.forEach(f => row(f.label, fmtNA(t[f.key])));
       yy -= 6;
       if (weeks.length) {
         section('Por semana');
@@ -2343,6 +2533,16 @@
   /* ---------------- Utilidades ---------------- */
   function byId(id) { return document.getElementById(id); }
   function num(v) { return Number(v) || 0; }
+  // Display: "not informed" (null/undefined/'') shows as an em dash; a number shows as itself.
+  function fmtNA(v) { return (v === null || v === undefined || v === '') ? '—' : v; }
+  // Parse a value into a number, or null when it is empty / not informed.
+  function numOrNull(v) {
+    if (v === null || v === undefined || String(v).trim() === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  // True when the field carries a real number (as opposed to N/A).
+  function informed(v) { return typeof v === 'number' && Number.isFinite(v); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
     ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
   function weekday(d) {
@@ -2396,7 +2596,8 @@
 
   /* ---------------- Início ---------------- */
   function boot() {
-    mostrarBannerTeste();   // faixa vermelha se estivermos no ambiente de teste
+    mostrarBannerTeste();   // faixa âmbar se estivermos no ambiente de teste
+    aplicarCorCabecalho();  // cor do cabeçalho (produção) ou âmbar (teste)
     conferirAmbiente();     // e a API confirma (ou desmente) que ambiente é esse
     if (sessionValid()) { render(); postAuthInit(); }
     else { showLogin(); }
