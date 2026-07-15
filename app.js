@@ -106,7 +106,7 @@
   // O API_BASE agora vem do ambiente escolhido (produção, salvo alguém trocar no menu).
   const API_BASE = ENVS[ENV].api;
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v41'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v42'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -347,7 +347,7 @@
      produção. Por isso não há checagem entre ambientes — a única regra é "produção não
      pode ser âmbar", garantida por validarCorCabecalho. */
   const HEADER_PALETTE = [
-    { nome: 'Vermelho', cor: '#d10a11' },
+    { nome: 'Coral',    cor: '#e8734e' },
     { nome: 'Azul',     cor: '#1b52c0' },
     { nome: 'Verde',    cor: '#1e7d45' },
     { nome: 'Teal',     cor: '#0f6f7f' },
@@ -355,7 +355,7 @@
     { nome: 'Magenta',  cor: '#b02a6b' },
     { nome: 'Grafite',  cor: '#37414f' },
   ];
-  const DEFAULT_HEADER = '#d10a11';   // vermelho da marca
+  const DEFAULT_HEADER = '#e8734e';   // coral da marca
   const TEST_AMBER = '#e08a00';
 
   function hexToRgb(hex) {
@@ -379,8 +379,9 @@
   function validarCorCabecalho(hex) {
     const rgb = hexToRgb(hex);
     if (!rgb) return 'cor inválida';
-    // Texto do cabeçalho é branco: exige contraste AA (≥ 4.5) para não sumir.
-    if (1.05 / (relLum(rgb) + 0.05) < 4.5) return 'clara demais — o texto branco do cabeçalho fica ilegível';
+    // Header text is white and large/bold, so require WCAG AA for large text (>= 3:1).
+    // This admits vibrant brand tones like the coral while still rejecting pale colors.
+    if (1.05 / (relLum(rgb) + 0.05) < 3) return 'clara demais — o texto branco do cabeçalho fica ilegível';
     // Faixa de matiz laranja/âmbar/amarelo: reservada ao ambiente de teste.
     const h = hueOf(rgb);
     if (h >= 30 && h <= 70) return 'parecida com o âmbar do ambiente de teste — escolha outra família de cor';
@@ -2109,9 +2110,18 @@
           msg.classList.remove('warn');
           return true;
         };
+        // Palette swatches are curated/pre-approved: apply directly (no re-validation).
         document.querySelectorAll('#c-swatches .swatch').forEach((b) => {
-          b.onclick = () => { const cor = b.getAttribute('data-cor'); if (tentar(cor)) marcarSwatch(cor); byId('c-cor-livre').value = cor; };
+          b.onclick = () => {
+            const cor = b.getAttribute('data-cor');
+            corEscolhida = cor;
+            marcarSwatch(cor);
+            byId('c-cor-livre').value = cor;
+            msg.textContent = 'cor aplicada ao salvar';
+            msg.classList.remove('warn');
+          };
         });
+        // The free picker is validated (contrast + not the test amber).
         byId('c-cor-livre').oninput = (e) => { if (tentar(e.target.value)) marcarSwatch(e.target.value); };
       }
 
@@ -2269,7 +2279,7 @@
   /* ---------------- Gerar PDF (sem biblioteca externa) ---------------- */
   // Cores (0-1) usadas no PDF
   const PDF = {
-    RED: [0.82, 0.04, 0.07], WHITE: [1, 1, 1], INK: [0.11, 0.11, 0.14],
+    RED: [0.91, 0.45, 0.31], WHITE: [1, 1, 1], INK: [0.11, 0.11, 0.14],
     MUTED: [0.42, 0.45, 0.50], LIGHT: [0.88, 0.89, 0.91], GREEN: [0.12, 0.62, 0.34],
   };
   function pdfEsc(s) { return String(s).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)'); }

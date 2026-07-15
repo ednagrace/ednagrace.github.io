@@ -1,8 +1,9 @@
 /* ================= Relatório Diário — Edna / Savegnago ================= */
 :root {
-  --red: #d10a11;
-  --red-dark: #a80009;
-  --red-soft: #fdecec;
+  /* Brand identity — coral (was red). These vars drive the whole app. */
+  --red: #e8734e;        /* coral (primary) */
+  --red-dark: #c9542f;   /* deeper coral (gradients, pressed) */
+  --red-soft: #fdeae2;   /* light coral tint (soft backgrounds) */
   --green: #1e9e57;
   --green-soft: #e7f6ee;
   --amber: #e08a00;
@@ -59,10 +60,11 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
   color: #fff;
   padding: calc(env(safe-area-inset-top) + 14px) 16px 14px;
   display: flex; align-items: center; gap: 12px;
-  box-shadow: 0 2px 8px rgba(160,0,9,.25);
+  /* Neutral shadow so it works with ANY header color (was a hardcoded red line). */
+  box-shadow: 0 2px 10px rgba(20, 22, 30, .18);
 }
 .appbar h1 { font-size: 19px; margin: 0; font-weight: 700; flex: 1; }
-.appbar .sub { font-size: 12.5px; opacity: .9; font-weight: 400; display: block; }
+.appbar .sub { font-size: 12.5px; opacity: .95; font-weight: 500; display: block; }
 .appbar .iconbtn {
   background: rgba(255,255,255,.16); border: none; color: #fff;
   width: 42px; height: 42px; border-radius: 12px; font-size: 20px;
@@ -202,27 +204,26 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .counter .name { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px; }
 .counter .name .emoji { font-size: 20px; }
 
-.stepper { display: flex; align-items: center; gap: 10px; }
+/* Compact stepper: [−] [input] [＋]. Fixed widths so the ＋ never leaves the screen. */
+.counter .top { gap: 10px; }
+.counter .name { flex: 1; min-width: 0; }   /* long labels shrink instead of pushing ＋ out */
+.stepper { display: flex; align-items: center; gap: 6px; flex: none; }
 .stepper button {
-  width: var(--tap); height: var(--tap); border-radius: 14px; border: none;
-  font-size: 28px; font-weight: 700; display: grid; place-items: center; line-height: 1;
+  width: 40px; height: 40px; border-radius: 12px; border: none; flex: none;
+  font-size: 24px; font-weight: 700; display: grid; place-items: center; line-height: 1;
 }
 .stepper .minus { background: var(--red-soft); color: var(--red-dark); }
-.stepper .minus:active { background: #f8d4d4; }
+.stepper .minus:active { filter: brightness(.94); }
 .stepper .plus { background: var(--green-soft); color: var(--green); }
-.stepper .plus:active { background: #cfeeda; }
-.stepper .val {
-  min-width: 58px; text-align: center; font-size: 30px; font-weight: 800;
-  font-variant-numeric: tabular-nums;
+.stepper .plus:active { filter: brightness(.94); }
+.stepper .val-input {
+  width: 52px; height: 40px; text-align: center; font-size: 22px; font-weight: 800;
+  font-variant-numeric: tabular-nums; color: var(--ink);
+  border: 1.5px solid var(--line); border-radius: 12px; background: #fbfbfc; padding: 0;
 }
-.stepper .val.na { color: var(--muted); font-weight: 700; }
-/* Botão N/A: menor que os do stepper, discreto até estar ativo. */
-.stepper .na-btn {
-  width: auto; min-width: 44px; height: var(--tap); padding: 0 10px;
-  font-size: 14px; font-weight: 800; border-radius: 12px;
-  background: #eef0f3; color: var(--muted);
-}
-.stepper .na-btn.active { background: var(--ink); color: #fff; }
+.stepper .val-input:focus { outline: none; border-color: var(--red); background: #fff; }
+.stepper .val-input.na { color: var(--muted); }
+.stepper .val-input::placeholder { color: var(--muted); opacity: .7; }
 
 /* colunas definidas no JS (grid-template-columns inline) conforme a largura da tela */
 .quick { display: grid; gap: 7px; margin-top: 12px; }
