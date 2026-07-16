@@ -3,31 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#e8734e" />
-  <!-- Set theme-color from the saved config BEFORE first paint, so the status bar (and the
-       system hairline the Android draws at the status-bar/header seam) uses the configured
-       color from the start — not the static coral default that JS would only fix later. -->
-  <script>
-    (function () {
-      try {
-        var c = (JSON.parse(localStorage.getItem('edna.config') || '{}').headerColor) || '';
-        if (/^#[0-9a-f]{6}$/i.test(c)) {
-          document.querySelector('meta[name="theme-color"]').setAttribute('content', c);
-        }
-      } catch (e) {}
-    })();
-  </script>
-  <!-- iOS installed app: make the status bar translucent so the app header shows behind it
-       (the clock/network overlay the header color). This makes the top strip follow the
-       configured color instead of a fixed system bar. -->
+  <!-- Fixed dark system status bar (clock/battery stay visible; never coral, never follows
+       the header color). The app's own header still follows the configured color. -->
+  <meta name="theme-color" content="#1b1d22" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
   <title>Relatório Diário — Edna</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="icons/icon.svg" />
-  <link rel="stylesheet" href="styles.css?v=47" />
+  <link rel="stylesheet" href="styles.css?v=48" />
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
@@ -36,7 +22,7 @@
   <!-- Barra de status de sincronização -->
   <div id="sync-toast" class="toast" hidden></div>
 
-  <script src="app.js?v=47"></script>
+  <script src="app.js?v=48"></script>
   <script>
     if ('serviceWorker' in navigator) {
       var swRefreshing = false;
