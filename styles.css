@@ -1,9 +1,14 @@
 /* ================= Relatório Diário — Edna / Savegnago ================= */
 :root {
-  /* Brand identity — coral (was red). These vars drive the whole app. */
-  --red: #e8734e;        /* coral (primary) */
-  --red-dark: #c9542f;   /* deeper coral (gradients, pressed) */
-  --red-soft: #fdeae2;   /* light coral tint (soft backgrounds) */
+  /* The configured header color drives the WHOLE identity. JS overrides these three from
+     Settings (and derives dark/soft + the status-bar theme-color). Defaults = brand coral. */
+  --header-color: #e8734e;
+  --header-dark: #c9542f;
+  --header-soft: #fdeae2;
+  /* Brand vars alias the header color, so every var(--red*) follows the configured color. */
+  --red: var(--header-color);
+  --red-dark: var(--header-dark);
+  --red-soft: var(--header-soft);
   --green: #1e9e57;
   --green-soft: #e7f6ee;
   --amber: #e08a00;
@@ -55,8 +60,8 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 
 .appbar {
   position: sticky; top: 0; z-index: 20;
-  /* Cor escolhida na config (produção). No teste, o body.has-env-banner força âmbar abaixo. */
-  background: var(--header-color, var(--red));
+  /* Configured color (production). In test, body.has-env-banner forces amber below. */
+  background: var(--header-color);
   color: #fff;
   padding: calc(env(safe-area-inset-top) + 14px) 16px 14px;
   display: flex; align-items: center; gap: 12px;

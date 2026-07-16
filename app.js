@@ -106,7 +106,7 @@
   // O API_BASE agora vem do ambiente escolhido (produção, salvo alguém trocar no menu).
   const API_BASE = ENVS[ENV].api;
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v42'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v43'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -393,11 +393,25 @@
     const c = state.config.headerColor;
     return (c && !validarCorCabecalho(c)) ? c : DEFAULT_HEADER;
   }
+  // Mixes a hex color toward black (amount < 0) or white (amount > 0), |amount| in [0,1].
+  function shade(hex, amount) {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return hex;
+    const target = amount < 0 ? 0 : 255;
+    const t = Math.abs(amount);
+    const h = (v) => Math.round(v + (target - v) * t).toString(16).padStart(2, '0');
+    return '#' + h(rgb.r) + h(rgb.g) + h(rgb.b);
+  }
+  // Applies the configured color to the WHOLE identity: sets --header-color and derives the
+  // dark/soft shades (used by buttons, FAB, quick-select, login gradient…) plus the mobile
+  // status-bar color. Test environment is always amber.
   function aplicarCorCabecalho() {
+    const c = IS_STAGING ? TEST_AMBER : corCabecalho();
+    const root = document.documentElement.style;
+    root.setProperty('--header-color', c);
+    root.setProperty('--header-dark', shade(c, -0.22));
+    root.setProperty('--header-soft', shade(c, 0.88));
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (IS_STAGING) { if (meta) meta.setAttribute('content', TEST_AMBER); return; }
-    const c = corCabecalho();
-    document.documentElement.style.setProperty('--header-color', c);
     if (meta) meta.setAttribute('content', c);
   }
 
