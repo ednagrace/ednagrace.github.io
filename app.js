@@ -106,7 +106,7 @@
   // O API_BASE agora vem do ambiente escolhido (produção, salvo alguém trocar no menu).
   const API_BASE = ENVS[ENV].api;
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v46'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v47'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -389,6 +389,22 @@
     };
     return '#' + f(0) + f(8) + f(4);
   }
+  function rgbToHex(r, g, b) {
+    const h = (v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
+    return '#' + h(r) + h(g) + h(b);
+  }
+  function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    let h = 0, s = 0; const l = (mx + mn) / 2;
+    if (d !== 0) {
+      s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+      h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+      h *= 60;
+    }
+    return { h, s: s * 100, l: l * 100 };
+  }
+  const hslToRgb = (h, s, l) => hexToRgb(hslToHex(h, s, l));
 
   // Paint-style swatch grid: a spectrum of header-ready colors. Built by sweeping the hue
   // wheel at two lightness levels and KEEPING ONLY what passes validarCorCabecalho (enough
@@ -407,6 +423,10 @@
     ['#4b5563', '#37414f', '#263238', '#111827'].forEach((cor) => out.push({ nome: cor, cor }));
     return out;
   })();
+
+  // Primary base colors (a quick row, like Paint's basic colors). All header-valid.
+  const PRIMARIES = ['#d10a11', '#e8734e', '#b02a6b', '#8e24aa', '#5e35b1',
+    '#1b52c0', '#0277bd', '#0f6f7f', '#1e7d45', '#37414f'];
 
   // A cor que o cabeçalho deve ter agora. No teste, null (o CSS força âmbar).
   function corCabecalho() {
@@ -2116,12 +2136,24 @@
       </div>` : `
       <div class="field">
         <label>Cor do cabeçalho</label>
-        <div class="swatches" id="c-swatches">
-          ${HEADER_PALETTE.map((p) => `<button type="button" class="swatch${(corCabecalho() === p.cor) ? ' sel' : ''}" data-cor="${p.cor}" style="background:${p.cor}" title="${p.nome}" aria-label="${p.nome}"></button>`).join('')}
-        </div>
-        <div class="row" style="margin-top:8px;align-items:center;gap:10px">
-          <input id="c-cor-livre" type="color" value="${esc(corCabecalho())}" aria-label="Cor personalizada" />
-          <span class="status-line" id="c-cor-msg">ou escolha uma cor personalizada</span>
+        <div class="cpick">
+          <div class="cp-preview" id="cp-prev"><span id="cp-hex"></span></div>
+          <div class="cp-sub">Cores primárias</div>
+          <div class="cp-primaries" id="cp-primaries">
+            ${PRIMARIES.map((cor) => `<button type="button" class="cp-dot" data-cor="${cor}" style="background:${cor}" aria-label="${cor}"></button>`).join('')}
+          </div>
+          <div class="cp-sub">Todas as cores</div>
+          <div class="swatches" id="cp-grid">
+            ${HEADER_PALETTE.map((p) => `<button type="button" class="swatch" data-cor="${p.cor}" style="background:${p.cor}" aria-label="${p.cor}"></button>`).join('')}
+          </div>
+          <div class="cp-sub">Escurecer / clarear</div>
+          <input type="range" id="cp-light" class="cp-range" min="6" max="62" step="1" />
+          <div class="cp-rgb">
+            <label>R<input id="cp-r" type="number" min="0" max="255" inputmode="numeric" /></label>
+            <label>G<input id="cp-g" type="number" min="0" max="255" inputmode="numeric" /></label>
+            <label>B<input id="cp-b" type="number" min="0" max="255" inputmode="numeric" /></label>
+          </div>
+          <div class="status-line" id="cp-msg"></div>
         </div>
       </div>`}
       <div class="actions">
@@ -2131,35 +2163,44 @@
     `, () => {
       byId('c-suporte').onclick = () => openSuporteWhatsApp();
 
-      // Cor do cabeçalho (só produção). Guarda a escolha atual e valida na hora.
+      // Header color picker (production only): primaries + spectrum grid + lightness + RGB.
+      // corEscolhida always holds the last VALID color; Save uses it.
       let corEscolhida = corCabecalho();
       if (!IS_STAGING) {
-        const msg = byId('c-cor-msg');
-        const marcarSwatch = (cor) => {
-          document.querySelectorAll('#c-swatches .swatch').forEach((b) =>
-            b.classList.toggle('sel', b.getAttribute('data-cor') === cor));
+        const msg = byId('cp-msg');
+        let cur = hexToRgb(corEscolhida) || hexToRgb(DEFAULT_HEADER);
+        const paint = () => {
+          const hex = rgbToHex(cur.r, cur.g, cur.b);
+          byId('cp-prev').style.background = hex;
+          byId('cp-hex').textContent = hex.toUpperCase();
+          byId('cp-r').value = Math.round(cur.r);
+          byId('cp-g').value = Math.round(cur.g);
+          byId('cp-b').value = Math.round(cur.b);
+          document.querySelectorAll('#cp-grid .swatch, #cp-primaries .cp-dot').forEach((b) =>
+            b.classList.toggle('sel', b.getAttribute('data-cor').toLowerCase() === hex.toLowerCase()));
+          const erro = validarCorCabecalho(hex);
+          if (erro) { msg.textContent = '⚠ ' + erro; msg.classList.add('warn'); }
+          else { corEscolhida = hex; msg.textContent = 'Cor válida ✓'; msg.classList.remove('warn'); }
         };
-        const tentar = (cor) => {
-          const erro = validarCorCabecalho(cor);
-          if (erro) { msg.textContent = '⚠ ' + erro; msg.classList.add('warn'); return false; }
-          corEscolhida = cor;
-          msg.textContent = 'cor aplicada ao salvar';
-          msg.classList.remove('warn');
-          return true;
-        };
-        // Palette swatches are curated/pre-approved: apply directly (no re-validation).
-        document.querySelectorAll('#c-swatches .swatch').forEach((b) => {
-          b.onclick = () => {
-            const cor = b.getAttribute('data-cor');
-            corEscolhida = cor;
-            marcarSwatch(cor);
-            byId('c-cor-livre').value = cor;
-            msg.textContent = 'cor aplicada ao salvar';
-            msg.classList.remove('warn');
-          };
+        const syncSlider = () => { byId('cp-light').value = Math.round(rgbToHsl(cur.r, cur.g, cur.b).l); };
+        const setHex = (hex) => { const rgb = hexToRgb(hex); if (rgb) { cur = rgb; paint(); syncSlider(); } };
+
+        document.querySelectorAll('#cp-grid .swatch, #cp-primaries .cp-dot').forEach((b) => {
+          b.onclick = () => setHex(b.getAttribute('data-cor'));
         });
-        // The free picker is validated (contrast + not the test amber).
-        byId('c-cor-livre').oninput = (e) => { if (tentar(e.target.value)) marcarSwatch(e.target.value); };
+        byId('cp-light').oninput = (e) => {
+          const hsl = rgbToHsl(cur.r, cur.g, cur.b);
+          cur = hslToRgb(hsl.h, hsl.s, Number(e.target.value)) || cur;
+          paint();  // don't re-sync the slider while the user is dragging it
+        };
+        const onRgb = () => {
+          const cl = (v) => Math.max(0, Math.min(255, Number(v) || 0));
+          cur = { r: cl(byId('cp-r').value), g: cl(byId('cp-g').value), b: cl(byId('cp-b').value) };
+          paint(); syncSlider();
+        };
+        ['cp-r', 'cp-g', 'cp-b'].forEach((id) => { byId(id).oninput = onRgb; });
+
+        paint(); syncSlider();
       }
 
       byId('c-save').onclick = () => {
