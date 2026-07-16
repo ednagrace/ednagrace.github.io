@@ -106,7 +106,7 @@
   // O API_BASE agora vem do ambiente escolhido (produção, salvo alguém trocar no menu).
   const API_BASE = ENVS[ENV].api;
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v44'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v45'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
