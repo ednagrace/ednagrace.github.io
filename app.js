@@ -106,7 +106,7 @@
   // O API_BASE agora vem do ambiente escolhido (produção, salvo alguém trocar no menu).
   const API_BASE = ENVS[ENV].api;
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v43'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v44'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -411,6 +411,8 @@
     root.setProperty('--header-color', c);
     root.setProperty('--header-dark', shade(c, -0.22));
     root.setProperty('--header-soft', shade(c, 0.88));
+    const rgb = hexToRgb(c) || { r: 20, g: 22, b: 30 };
+    root.setProperty('--header-glow', `rgba(${rgb.r},${rgb.g},${rgb.b},0.4)`);
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', c);
   }

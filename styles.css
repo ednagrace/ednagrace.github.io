@@ -5,6 +5,7 @@
   --header-color: #e8734e;
   --header-dark: #c9542f;
   --header-soft: #fdeae2;
+  --header-glow: rgba(232,115,78,.4);   /* colored shadow (FAB); JS overrides from config */
   /* Brand vars alias the header color, so every var(--red*) follows the configured color. */
   --red: var(--header-color);
   --red-dark: var(--header-dark);
@@ -180,7 +181,8 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
   background: var(--red); color: #fff; border: none;
   height: 58px; padding: 0 26px 0 20px; border-radius: 999px;
   font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 10px;
-  box-shadow: 0 8px 22px rgba(190,0,9,.42); z-index: 30;
+  /* Glow follows the configured color (JS sets --header-glow). */
+  box-shadow: 0 8px 22px var(--header-glow, rgba(20,22,30,.28)); z-index: 30;
 }
 .fab:active { background: var(--red-dark); }
 .fab .plus { font-size: 26px; line-height: 1; }
