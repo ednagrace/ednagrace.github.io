@@ -106,7 +106,7 @@
   // O API_BASE agora vem do ambiente escolhido (produção, salvo alguém trocar no menu).
   const API_BASE = ENVS[ENV].api;
   const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-  const APP_VERSION = 'v45'; // aumente junto com o CACHE do sw.js a cada atualização
+  const APP_VERSION = 'v46'; // aumente junto com o CACHE do sw.js a cada atualização
 
   // Config do usuário (fica no celular como cache; a fonte compartilhada é o Neon).
   const defaultConfig = {
@@ -346,15 +346,6 @@
      O ambiente de TESTE não escolhe cor: é sempre âmbar, para nunca se confundir com a
      produção. Por isso não há checagem entre ambientes — a única regra é "produção não
      pode ser âmbar", garantida por validarCorCabecalho. */
-  const HEADER_PALETTE = [
-    { nome: 'Coral',    cor: '#e8734e' },
-    { nome: 'Azul',     cor: '#1b52c0' },
-    { nome: 'Verde',    cor: '#1e7d45' },
-    { nome: 'Teal',     cor: '#0f6f7f' },
-    { nome: 'Roxo',     cor: '#6a2fb5' },
-    { nome: 'Magenta',  cor: '#b02a6b' },
-    { nome: 'Grafite',  cor: '#37414f' },
-  ];
   const DEFAULT_HEADER = '#e8734e';   // coral da marca
   const TEST_AMBER = '#e08a00';
 
@@ -387,6 +378,36 @@
     if (h >= 30 && h <= 70) return 'parecida com o âmbar do ambiente de teste — escolha outra família de cor';
     return null;
   }
+
+  function hslToHex(h, s, l) {
+    s /= 100; l /= 100;
+    const a = s * Math.min(l, 1 - l);
+    const f = (n) => {
+      const k = (n + h / 30) % 12;
+      const c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+      return Math.round(255 * c).toString(16).padStart(2, '0');
+    };
+    return '#' + f(0) + f(8) + f(4);
+  }
+
+  // Paint-style swatch grid: a spectrum of header-ready colors. Built by sweeping the hue
+  // wheel at two lightness levels and KEEPING ONLY what passes validarCorCabecalho (enough
+  // contrast for white text, and never the reserved test amber). The brand coral leads.
+  const HEADER_PALETTE = (() => {
+    const out = [{ nome: 'Coral', cor: DEFAULT_HEADER }];
+    for (const l of [34, 46]) {
+      for (let h = 0; h < 360; h += 15) {
+        const cor = hslToHex(h, 72, l);
+        if (!validarCorCabecalho(cor) && !out.some((o) => o.cor === cor)) {
+          out.push({ nome: cor, cor });
+        }
+      }
+    }
+    // A few neutrals to round it out (like Paint's grey row).
+    ['#4b5563', '#37414f', '#263238', '#111827'].forEach((cor) => out.push({ nome: cor, cor }));
+    return out;
+  })();
+
   // A cor que o cabeçalho deve ter agora. No teste, null (o CSS força âmbar).
   function corCabecalho() {
     if (IS_STAGING) return null;

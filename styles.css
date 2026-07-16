@@ -468,17 +468,17 @@ body.has-env-banner .appbar .net-badge { background: rgba(0,0,0,.15); }
 /* o cabeçalho já está abaixo da faixa: não precisa reservar espaço para o notch de novo */
 body.has-env-banner .appbar { padding-top: 14px; }
 
-/* ---------- Seletor de cor do cabeçalho (config) ---------- */
-.swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+/* ---------- Seletor de cor do cabeçalho (config) — grid estilo Paint ---------- */
+.swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
 .swatch {
-  width: 38px; height: 38px; border-radius: 10px; border: 2px solid var(--line);
-  cursor: pointer; padding: 0; position: relative;
+  width: 100%; aspect-ratio: 1; height: auto; border-radius: 7px;
+  border: 1.5px solid rgba(0,0,0,.10); cursor: pointer; padding: 0; position: relative;
 }
 .swatch.sel { border-color: var(--ink); box-shadow: 0 0 0 2px #fff inset; }
 .swatch.sel::after {
   content: '✓'; position: absolute; inset: 0; display: flex; align-items: center;
-  justify-content: center; color: #fff; font-weight: 800; font-size: 16px;
-  text-shadow: 0 1px 2px rgba(0,0,0,.5);
+  justify-content: center; color: #fff; font-weight: 800; font-size: 14px;
+  text-shadow: 0 1px 2px rgba(0,0,0,.6);
 }
 input[type="color"] {
   width: 46px; height: 34px; padding: 0; border: 1px solid var(--line);
