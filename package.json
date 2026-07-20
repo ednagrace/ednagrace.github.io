@@ -1,0 +1,13 @@
+{
+  "name": "edna-relatorio-diario",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Relatório Diário — Edna Grace / Savegnago (PWA, front-end estático)",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

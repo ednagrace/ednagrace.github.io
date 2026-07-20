@@ -4,6 +4,10 @@ _docs/
 # Sistema
 Thumbs.db
 .DS_Store
+node_modules/
+
+# build/ NÃO entra aqui de propósito: não há CI configurado, então o JS compilado
+# (a partir de src/**/*.ts) precisa ser commitado para o GitHub Pages servir.
 
 .vscode
 .claude
