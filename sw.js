@@ -24,6 +24,7 @@ const ASSETS = [
   './build/auth.js',
   './build/render.js',
   './build/pdf.js',
+  './build/push.js',
   './build/screens/login.js',
   './build/screens/list.js',
   './build/screens/panel.js',
@@ -82,6 +83,31 @@ self.addEventListener('fetch', (e) => {
         })
         .catch(() => cached);
       return cached || rede;
+    })
+  );
+});
+
+// Lembrete de retorno de cliente: notificação push disparada pelo cron do back-end.
+self.addEventListener('push', (e) => {
+  let data = { title: 'Relatório Diário', body: 'Você tem um lembrete.' };
+  try { if (e.data) data = e.data.json(); } catch (err) {}
+  e.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: './icons/icon-192.png',
+      badge: './icons/icon-192.png',
+      tag: 'lembrete-cliente',
+    })
+  );
+});
+
+// Toque na notificação → foca uma aba já aberta do app, ou abre uma nova.
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientsList) => {
+      for (const c of clientsList) { if ('focus' in c) return c.focus(); }
+      if (self.clients.openWindow) return self.clients.openWindow('./');
     })
   );
 });

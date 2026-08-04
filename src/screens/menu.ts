@@ -19,6 +19,7 @@ import {
 import { openPanel } from './panel.js';
 import { openImport } from './import.js';
 import { openMsg } from './messages.js';
+import { pushSupported, currentPushSubscription, subscribeToPush, unsubscribeFromPush } from '../push.js';
 
 /* ---------------- MENU / SETTINGS ---------------- */
 export function openMenu() {
@@ -152,12 +153,29 @@ function openConfig() {
         <div class="status-line" id="cp-msg"></div>
       </div>
     </div>`}
+    ${pushSupported() ? `
+    <label class="check-row">
+      <input type="checkbox" id="c-push" />
+      <span>🔔 Notificações de lembrete
+        <small>Avisa neste aparelho quando um cliente vencer a data de retorno.</small></span>
+    </label>` : ''}
     <div class="actions">
       <button class="primary" id="c-save" style="flex:1">Salvar</button>
     </div>
     <button type="button" class="pdf-btn btn-wpp" id="c-suporte" style="margin-top:16px">💬 Falar no WhatsApp (suporte)</button>
   `, () => {
     byId('c-suporte').onclick = () => openSupportWhatsApp();
+
+    if (byId('c-push')) {
+      const pushBox = byId('c-push') as HTMLInputElement;
+      currentPushSubscription().then((sub) => { pushBox.checked = !!sub; });
+      pushBox.onchange = async () => {
+        pushBox.disabled = true;
+        const ok = pushBox.checked ? await subscribeToPush() : await unsubscribeFromPush();
+        if (!ok) pushBox.checked = !pushBox.checked; // reverte se falhou
+        pushBox.disabled = false;
+      };
+    }
 
     // Header color picker (production only): primaries + spectrum grid + lightness + RGB.
     // chosenColor always holds the last VALID color; Save uses it.
