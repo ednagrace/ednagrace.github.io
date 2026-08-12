@@ -18,7 +18,7 @@ import {
 } from '../theme.js';
 import { openPanel } from './panel.js';
 import { openImport } from './import.js';
-import { openMsg } from './messages.js';
+import { openMsg, sendCartaoLink } from './messages.js';
 import { pushSupported, currentPushSubscription, subscribeToPush, unsubscribeFromPush } from '../push.js';
 
 /* ---------------- MENU / SETTINGS ---------------- */
@@ -40,6 +40,10 @@ export function openMenu() {
     <button class="menu-item" id="mi-share">
       <span class="mi-ico">💬</span>
       <span>Compartilhar resumo do dia<small>Enviar por WhatsApp</small></span>
+    </button>
+    <button class="menu-item" id="mi-cartao">
+      <span class="mi-ico">💳</span>
+      <span>Enviar link do Cartão<small>Nosso Cartão · Enviar por WhatsApp</small></span>
     </button>
     <button class="menu-item" id="mi-msg">
       <span class="mi-ico">📝</span>
@@ -90,6 +94,7 @@ export function openMenu() {
       else closeSheet();
     };
     byId('mi-share').onclick = () => { closeSheet(); shareToday(); };
+    byId('mi-cartao').onclick = () => { closeSheet(); sendCartaoLink(); };
     byId('mi-msg').onclick = () => { closeSheet(); openMsg(); };
     byId('mi-logout').onclick = () => { closeSheet(); logout(); };
     const st = byId('cfg-status');
@@ -337,7 +342,6 @@ function shareToday() {
   let txt = `📋 *Relatório Diário — ${state.config.loja}*\n`;
   txt += `👤 ${state.config.promotora}\n`;
   txt += `📅 ${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}\n\n`;
-  txt += `👥 Clientes abordados: ${r.clientesAbordados ?? '—'}\n\n`;
   txt += `*Propostas*\n✅ Aprovadas: ${r.aprovadas ?? '—'}\n🟡 Pré-aprovado: ${r.preAprovado ?? '—'}\n❌ Reprovadas: ${r.reprovadas ?? '—'}\n🔍 Em análise: ${r.analise ?? '—'}\n⏳ Pendências: ${r.pendencias ?? '—'}\n\n`;
   txt += `🔗 Link: ${r.link ?? '—'}\n`;
   txt += `💳 Cartão — 📦 Entregas: ${r.cartaoEntregas ?? '—'} | 🕓 A receber: ${r.cartaoReceber ?? '—'} | ✅ Ativação: ${r.cartaoAtivacao ?? '—'}\n\n`;

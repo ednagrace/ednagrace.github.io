@@ -3,11 +3,6 @@ import type { Group, Field } from './types.js';
 /* ---------- Report field definitions ---------- */
 export const GROUPS: Group[] = [
   {
-    title: 'Abordagem', emoji: '👥', fields: [
-      { key: 'clientesAbordados', label: 'Clientes Abordados', emoji: '👥' },
-    ]
-  },
-  {
     title: 'Propostas', emoji: '📋', fields: [
       { key: 'aprovadas',  label: 'Aprovadas',   emoji: '✅', dailyMeta: true },
       { key: 'preAprovado',label: 'Pré-Aprovado',emoji: '🟡' },
@@ -64,9 +59,18 @@ export const ALLOWLIST = [
 ];
 
 export const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-export const APP_VERSION = 'v48'; // bump together with sw.js's CACHE on every release
+export const APP_VERSION = 'v49'; // bump together with sw.js's CACHE on every release
 export const ADMIN_EMAIL = 'jpantunesdesouza@gmail.com';
 
 export const DEFAULT_META = 22; // default monthly goal for approved proposals (editable)
 export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 export const SUPORTE_WPP = '5519999974213'; // 55 (BR) + 19 99997-4213
+
+// "Nosso Cartão" link — quick WhatsApp share to clients.
+export const NOSSO_CARTAO_URL = 'https://nossocartaoacs.com.br/nosso-cartao';
+// Title doubles as the de-dup key when auto-creating this template server-side (see api.ts).
+export const CARTAO_TEMPLATE_TITLE = 'Nosso Cartão (link)';
+export const CARTAO_TEMPLATE_BODY =
+  '{saudacao}, {contato}! 💳\n\n' +
+  'Aqui está o link para você solicitar o Nosso Cartão:\n' + NOSSO_CARTAO_URL + '\n\n' +
+  'Qualquer dúvida, é só chamar — vou ajudá-l{oa} com o que precisar!';
