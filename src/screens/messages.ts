@@ -4,7 +4,7 @@ import { pad } from '../dateUtils.js';
 import { esc, byId } from '../format.js';
 import { isOnline, pullContacts, pullTemplates, authHeaders } from '../api.js';
 import { apiUrl } from '../env.js';
-import { CARTAO_TEMPLATE_TITLE, CARTAO_TEMPLATE_BODY } from '../constants.js';
+import { CARTAO_QUICK_BODY } from '../constants.js';
 import { refreshSession } from '../auth.js';
 import { toast } from '../ui.js';
 import { currentContact, contactLabel, phoneDigits, contactPickerAvailable } from '../contacts.js';
@@ -147,12 +147,11 @@ export function renderMsg() {
   if (byId('tpl-del')) byId('tpl-del').onclick = deleteTemplate;
 }
 
-// Quick action from the menu: sends the "Nosso Cartão" link straight to WhatsApp,
-// same behavior as the templates screen's "Enviar" (uses the currently selected
-// contact if there is one, otherwise WhatsApp asks who to send to).
+// Quick action from the menu: sends the "Nosso Cartão" link straight to WhatsApp.
+// Independent wording from the templates-screen version — this flow has no contact
+// name to fill in, only the currently selected contact's phone (if any).
 export function sendCartaoLink() {
-  const tpl = state.templates.find(t => t.title === CARTAO_TEMPLATE_TITLE);
-  const txt = applyPlaceholders(tpl ? tpl.body : CARTAO_TEMPLATE_BODY);
+  const txt = applyPlaceholders(CARTAO_QUICK_BODY);
   const c = currentContact();
   const tel = c ? phoneDigits(c.phone) : '';
   window.open('https://wa.me/' + tel + '?text=' + encodeURIComponent(txt), '_blank');

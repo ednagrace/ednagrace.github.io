@@ -73,4 +73,10 @@ export const CARTAO_TEMPLATE_TITLE = 'Nosso Cartão (link)';
 export const CARTAO_TEMPLATE_BODY =
   '{saudacao}, {contato}! 💳\n\n' +
   'Aqui está o link para você solicitar o Nosso Cartão:\n' + NOSSO_CARTAO_URL + '\n\n' +
-  'Qualquer dúvida, é só chamar — vou ajudá-l{oa} com o que precisar!';
+  'À disposição!';
+// Independent wording for the menu's quick-send button — no {contato}, since that flow
+// often has no contact selected (would print an empty name right after the greeting).
+export const CARTAO_QUICK_BODY =
+  '{saudacao}! 💳\n\n' +
+  'Segue o link para solicitar o Nosso Cartão:\n' + NOSSO_CARTAO_URL + '\n\n' +
+  'À disposição!';
