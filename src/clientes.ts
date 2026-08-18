@@ -13,7 +13,9 @@ function fmtDateBR(iso?: string | null): string {
 
 // `tipo` vem cru da digitalização das fotos (ex.: "nota-geral;proposta-reprovada") — pode
 // ter mais de uma etiqueta separada por ";". Mostra só a mais relevante, não a lista toda.
-const TIPO_LABELS: [string, string][] = [
+// Mesma lista usada no <select> de "nova nota" — precisa bater com TIPOS em
+// relatorio-api/api/cliente-eventos.js.
+export const TIPO_LABELS: [string, string][] = [
   ['cartao-aprovado', '✅ Cartão aprovado'],
   ['proposta-aprovada', '✅ Aprovada'],
   ['proposta-reprovada', '❌ Reprovada'],

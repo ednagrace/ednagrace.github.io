@@ -1,17 +1,18 @@
 import type { Cliente } from '../types.js';
-import { state } from '../state.js';
+import { state, sessionValid } from '../state.js';
 import { app, render } from '../render.js';
 import { esc, byId } from '../format.js';
-import { pad, parseISO } from '../dateUtils.js';
-import { pullClientes, getClienteDetalhe } from '../api.js';
-import { clienteLabel, clienteInfoLine, eventoLabel } from '../clientes.js';
-import { openSheet, closeSheet } from '../ui.js';
+import { pad, parseISO, todayISO } from '../dateUtils.js';
+import { isOnline, pullClientes, getClienteDetalhe, saveCliente, addClienteEvento } from '../api.js';
+import { clienteLabel, clienteInfoLine, eventoLabel, TIPO_LABELS } from '../clientes.js';
+import { openSheet, closeSheet, toast } from '../ui.js';
 import { openContactSheet } from '../components/contatoSheet.js';
 
 /* ---------------- SCREEN: CLIENTES (cadastro da Edna) ----------------
    Complementa a agenda de Contatos: existem clientes sem telefone/contato vinculado (a
    digitalização das fotos trouxe casos assim), que nunca apareceriam navegando só pelos
-   Contatos. Aqui dá pra achar qualquer cliente cadastrado e ver o histórico dele. */
+   Contatos. Aqui dá pra achar qualquer cliente cadastrado, cadastrar um novo direto (sem
+   precisar de um contato) e ver/adicionar ao histórico dele. */
 export function openClientes() {
   state.clientesSearch = '';
   state.view = 'clientes';
@@ -32,8 +33,10 @@ export function renderClientes() {
       </div>
       <div class="list" id="cli-list">${clienteRowsHTML()}</div>
     </div>
+    <button class="fab" id="fab-novo-cliente"><span class="plus">＋</span> Novo cliente</button>
   `;
   byId('btn-back').onclick = () => { state.view = 'list'; render(); };
+  byId('fab-novo-cliente').onclick = () => openClienteForm();
   const s = byId('cli-search') as HTMLInputElement;
   s.oninput = () => { state.clientesSearch = s.value; renderClientesSoft(); };
   wireClienteRows();
@@ -60,7 +63,7 @@ function clienteRowsHTML(): string {
   if (!rows.length) {
     return `<div class="empty"><div class="ico">🗂️</div><p>${state.clientesSearch
       ? 'Nenhum cliente encontrado.'
-      : 'Nenhum cliente cadastrado ainda.'}</p></div>`;
+      : 'Nenhum cliente cadastrado ainda.<br>Toque em <b>Novo cliente</b> para começar.'}</p></div>`;
   }
   return rows.map(clienteRowHTML).join('');
 }
@@ -102,6 +105,114 @@ function fmtRetorno(iso: string): string {
   return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
 }
 
+/* ---------- Novo cliente / editar cliente (sem precisar de um contato) ---------- */
+function openClienteForm(existing?: Cliente, onSaved?: (c: Cliente) => void) {
+  openSheet(`
+    <h2>${existing ? 'Editar cliente' : 'Novo cliente'}</h2>
+    <div class="field">
+      <label>Sequência (obrigatório)</label>
+      <input id="cf-seq" type="text" value="${esc(existing ? existing.sequencia : '')}" placeholder="Ex.: 3208480" />
+    </div>
+    <div class="field">
+      <label>Nome (opcional)</label>
+      <input id="cf-nome" type="text" value="${esc(existing?.nome || '')}" placeholder="Ex.: Maria Silva" />
+    </div>
+    <div class="field">
+      <label>Telefone (opcional)</label>
+      <input id="cf-tel" type="tel" inputmode="tel" value="${esc(existing?.telefone || '')}" placeholder="(19) 99999-9999" />
+    </div>
+    <div class="field">
+      <label>Limite do cartão (opcional)</label>
+      <input id="cf-limite" type="number" inputmode="decimal" step="0.01"
+        value="${existing && existing.limite != null && existing.limite !== '' ? esc(String(existing.limite)) : ''}"
+        placeholder="Ex.: 500" />
+    </div>
+    <div class="actions"><button class="primary" id="cf-save" style="flex:1">Salvar cliente</button></div>
+    <div class="status-line" id="cf-status"></div>
+  `, () => {
+    byId('cf-save').onclick = async () => {
+      const seq = (byId('cf-seq') as HTMLInputElement).value.trim();
+      const st = byId('cf-status');
+      if (!seq) { st.textContent = 'Informe a sequência.'; st.style.color = '#d10a11'; return; }
+      if (!isOnline() || !sessionValid()) { toast('Conecte à internet para salvar', 'err'); return; }
+      const btn = byId('cf-save') as HTMLButtonElement;
+      btn.disabled = true;
+      const r = await saveCliente({
+        id: existing ? existing.id : undefined,
+        sequencia: seq,
+        nome: (byId('cf-nome') as HTMLInputElement).value.trim(),
+        telefone: (byId('cf-tel') as HTMLInputElement).value.trim(),
+        limite: (byId('cf-limite') as HTMLInputElement).value,
+      });
+      if (!r.ok || !r.cliente) {
+        btn.disabled = false;
+        st.textContent = 'Erro: ' + (r.error || 'não foi possível salvar');
+        st.style.color = '#d10a11';
+        return;
+      }
+      await pullClientes();
+      closeSheet();
+      toast('Cliente salvo ✓', 'ok');
+      if (state.view === 'clientes') renderClientesSoft();
+      if (onSaved) onSaved(r.cliente);
+    };
+  });
+}
+
+/* ---------- Nova nota / evento no histórico do cliente ---------- */
+function openEventoForm(c: Cliente, onSaved: () => void) {
+  openSheet(`
+    <h2>Nova nota</h2>
+    <p class="status-line" style="margin:-4px 0 12px">${esc(clienteLabel(c))}</p>
+    <div class="field">
+      <label>Tipo</label>
+      <select id="ef-tipo">
+        ${TIPO_LABELS.map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="field">
+      <label>Observação</label>
+      <textarea id="ef-obs" placeholder="Ex.: cliente pediu para retornar em outubro"></textarea>
+    </div>
+    <div class="field">
+      <label>Data do evento</label>
+      <input id="ef-data" type="date" value="${todayISO()}" max="${todayISO()}" />
+    </div>
+    <div class="field">
+      <label>Retornar em (opcional)</label>
+      <input id="ef-retorno" type="date" />
+    </div>
+    <div class="actions"><button class="primary" id="ef-save" style="flex:1">Salvar nota</button></div>
+    <div class="status-line" id="ef-status"></div>
+  `, () => {
+    byId('ef-save').onclick = async () => {
+      const obs = (byId('ef-obs') as HTMLTextAreaElement).value.trim();
+      const st = byId('ef-status');
+      if (!obs) { st.textContent = 'Escreva alguma observação.'; st.style.color = '#d10a11'; return; }
+      if (!isOnline() || !sessionValid()) { toast('Conecte à internet para salvar', 'err'); return; }
+      const btn = byId('ef-save') as HTMLButtonElement;
+      btn.disabled = true;
+      const r = await addClienteEvento({
+        clienteId: c.id,
+        tipo: (byId('ef-tipo') as HTMLSelectElement).value,
+        observacao: obs,
+        dataEvento: (byId('ef-data') as HTMLInputElement).value,
+        retornarEm: (byId('ef-retorno') as HTMLInputElement).value,
+        loja: state.config.loja,
+      });
+      if (!r.ok) {
+        btn.disabled = false;
+        st.textContent = 'Erro: ' + (r.error || 'não foi possível salvar');
+        st.style.color = '#d10a11';
+        return;
+      }
+      closeSheet();
+      toast('Nota adicionada ✓', 'ok');
+      onSaved();
+    };
+  });
+}
+
 function openClienteDetalhe(c: Cliente) {
   openSheet(`
     <h2>${esc(clienteLabel(c))}</h2>
@@ -109,6 +220,10 @@ function openClienteDetalhe(c: Cliente) {
       <div class="ct-sub">Sequência: ${esc(c.sequencia)}</div>
       ${c.telefone ? `<div class="ct-sub">Telefone: ${esc(c.telefone)}</div>` : '<div class="ct-sub">Sem telefone cadastrado</div>'}
       ${c.limite != null && c.limite !== '' ? `<div class="ct-sub">Limite: R$ ${esc(String(c.limite))}</div>` : ''}
+    </div>
+    <div class="ct-buttons" style="margin-top:8px">
+      <button type="button" class="ct-btn" id="cli-editar">✏️ Editar</button>
+      <button type="button" class="ct-btn" id="cli-nova-nota">🗒️ Nova nota</button>
     </div>
     <div id="cli-det-contato"></div>
     <div class="field" style="margin-top:14px">
@@ -134,16 +249,31 @@ function openClienteDetalhe(c: Cliente) {
       contatoBox.innerHTML = '<div class="hint-inline" style="margin-top:8px">Nenhum contato da agenda vinculado a este cliente.</div>';
     }
 
-    getClienteDetalhe(c.id).then((det) => {
-      const box = byId('cli-det-eventos');
-      if (!box) return;
-      if (!det || !det.eventos.length) { box.innerHTML = '<div class="ct-sub">Sem histórico registrado.</div>'; return; }
-      box.innerHTML = det.eventos.map((ev) => `
-        <div class="cl-result" style="cursor:default">
-          <div>${esc(eventoLabel(ev))}</div>
-          ${ev.observacao ? `<div class="ct-sub">${esc(ev.observacao)}</div>` : ''}
-          ${ev.retornarEm ? `<div class="ct-sub">↩️ Retornar em ${esc(fmtRetorno(ev.retornarEm))}</div>` : ''}
-        </div>`).join('');
-    });
+    // Reabre o detalhe com dado fresco depois de editar/adicionar nota — mantém a pessoa
+    // no mesmo lugar em vez de jogar de volta pra lista.
+    const reabrir = async () => {
+      await pullClientes();
+      const atualizado = state.clientes.find((x) => String(x.id) === String(c.id)) || c;
+      if (state.view === 'clientes') renderClientesSoft();
+      openClienteDetalhe(atualizado);
+    };
+    byId('cli-editar').onclick = () => openClienteForm(c, () => reabrir());
+    byId('cli-nova-nota').onclick = () => openEventoForm(c, () => reabrir());
+
+    carregarEventos(c.id);
+  });
+}
+
+function carregarEventos(clienteId: string | number) {
+  getClienteDetalhe(clienteId).then((det) => {
+    const box = byId('cli-det-eventos');
+    if (!box) return;
+    if (!det || !det.eventos.length) { box.innerHTML = '<div class="ct-sub">Sem histórico registrado.</div>'; return; }
+    box.innerHTML = det.eventos.map((ev) => `
+      <div class="cl-result" style="cursor:default">
+        <div>${esc(eventoLabel(ev))}</div>
+        ${ev.observacao ? `<div class="ct-sub">${esc(ev.observacao)}</div>` : ''}
+        ${ev.retornarEm ? `<div class="ct-sub">↩️ Retornar em ${esc(fmtRetorno(ev.retornarEm))}</div>` : ''}
+      </div>`).join('');
   });
 }

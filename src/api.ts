@@ -97,6 +97,39 @@ export async function getClienteDetalhe(id: string | number): Promise<{ cliente:
   } catch (e) { return null; }
 }
 
+// Cria ou edita um cliente direto (sem passar por um contato) — tela de Clientes.
+// payload.id presente = edita esse cliente; ausente = cria (ou completa, se a sequência já
+// existir — upsert do lado do servidor).
+export async function saveCliente(payload: {
+  id?: string | number; sequencia: string; nome?: string; telefone?: string; limite?: string | number;
+}): Promise<{ ok: boolean; cliente?: Cliente; error?: string }> {
+  if (!API_BASE || !sessionValid()) return { ok: false, error: 'sem conexão' };
+  try {
+    const res = await fetch(apiUrl('/api/clientes'), {
+      method: 'POST', headers: authHeaders(), body: JSON.stringify({ cliente: payload }),
+    });
+    if (res.status === 401) { refreshSession(); return { ok: false, error: 'sessão expirada' }; }
+    const data = await res.json();
+    return data.ok ? { ok: true, cliente: data.cliente } : { ok: false, error: data.error };
+  } catch (e: any) { return { ok: false, error: e.message }; }
+}
+
+// Registra uma nova nota/evento no histórico de um cliente (proposta aprovada/reprovada, link
+// pendente, nota geral...), feito pelo app — complementa o que veio da digitalização das fotos.
+export async function addClienteEvento(payload: {
+  clienteId: string | number; tipo: string; observacao: string; dataEvento?: string; retornarEm?: string; loja?: string;
+}): Promise<{ ok: boolean; evento?: ClienteEvento; error?: string }> {
+  if (!API_BASE || !sessionValid()) return { ok: false, error: 'sem conexão' };
+  try {
+    const res = await fetch(apiUrl('/api/cliente-eventos'), {
+      method: 'POST', headers: authHeaders(), body: JSON.stringify({ evento: payload }),
+    });
+    if (res.status === 401) { refreshSession(); return { ok: false, error: 'sessão expirada' }; }
+    const data = await res.json();
+    return data.ok ? { ok: true, evento: data.evento } : { ok: false, error: data.error };
+  } catch (e: any) { return { ok: false, error: e.message }; }
+}
+
 /* ---------- WhatsApp message templates ---------- */
 export async function pullTemplates() {
   if (!API_BASE || !sessionValid() || !isOnline()) return;
