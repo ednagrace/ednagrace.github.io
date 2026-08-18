@@ -1,4 +1,4 @@
-import type { Report } from './types.js';
+import type { Report, Cliente } from './types.js';
 import { API_BASE, apiUrl } from './env.js';
 import { LS } from './env.js';
 import { state, save, sessionValid } from './state.js';
@@ -56,6 +56,18 @@ export async function pullContacts() {
     const data = await res.json();
     if (data && data.ok) { state.contacts = data.contacts || []; save(LS.contacts, state.contacts); }
   } catch (e) {}
+}
+
+// Live search, not cached in state (results are ephemeral, shown while typing in the
+// cliente-link picker). Empty query short-circuits to avoid listing the whole table.
+export async function searchClientes(q: string): Promise<Cliente[]> {
+  if (!API_BASE || !sessionValid() || !q.trim()) return [];
+  try {
+    const res = await fetch(apiUrl('/api/clientes?q=' + encodeURIComponent(q.trim())), { headers: authHeaders() });
+    if (res.status === 401) { refreshSession(); return []; }
+    const data = await res.json();
+    return (data && data.ok && data.clientes) || [];
+  } catch (e) { return []; }
 }
 
 /* ---------- WhatsApp message templates ---------- */

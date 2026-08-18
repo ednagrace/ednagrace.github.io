@@ -320,6 +320,48 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 }
 .ct-btn:active { background: var(--red-soft); }
 
+/* Botão que abre a tela de Contatos (substitui o <select> antigo) */
+.ct-picker {
+  width: 100%; min-height: 52px; border: 1.5px solid var(--line); border-radius: 12px;
+  background: #fff; padding: 8px 14px; display: flex; align-items: center; gap: 10px; text-align: left;
+}
+.ct-picker:active { background: #fafafa; }
+.ct-picker-name { font-size: 15px; font-weight: 700; color: var(--ink); }
+.ct-picker-sub { font-size: 13px; color: var(--muted); margin-left: 4px; }
+.ct-picker-placeholder { font-size: 14.5px; color: var(--muted); flex: 1; }
+.ct-go { margin-left: auto; color: var(--muted); font-size: 20px; }
+
+/* ---------- Tela de Contatos (agenda) ---------- */
+.contact-row {
+  display: flex; align-items: center; gap: 12px; background: var(--card);
+  border-radius: var(--radius); padding: 12px 14px; box-shadow: var(--shadow);
+}
+.contact-row:active { background: #fafafa; }
+.avatar-circle {
+  width: 42px; height: 42px; border-radius: 50%; background: var(--red-soft); color: var(--red-dark);
+  display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; flex: 0 0 auto;
+}
+.ct-info { flex: 1; min-width: 0; }
+.ct-name { font-weight: 700; font-size: 15px; }
+.ct-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.ct-row-edit {
+  border: none; background: none; font-size: 17px; flex: 0 0 auto; padding: 6px;
+}
+
+/* ---------- Vínculo a cliente cadastrado (dentro do sheet de contato) ---------- */
+.cl-linked { padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 12px; background: #fbfbfc; font-size: 14px; }
+.cl-suggest {
+  width: 100%; text-align: left; padding: 10px 12px; border-radius: 12px; margin-bottom: 8px;
+  border: 1.5px solid var(--green); background: var(--green-soft); color: var(--ink); font-size: 13.5px;
+}
+.cl-results { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; max-height: 180px; overflow-y: auto; }
+.cl-result {
+  text-align: left; padding: 9px 12px; border-radius: 10px; border: 1.5px solid var(--line);
+  background: #fff; font-size: 13.5px; color: var(--ink);
+}
+.cl-result:active { background: var(--red-soft); }
+.cl-create { margin-top: 8px; }
+
 /* Checkbox "salvar também na agenda" */
 .check-row {
   display: flex; align-items: flex-start; gap: 11px; padding: 12px;

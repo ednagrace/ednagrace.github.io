@@ -32,6 +32,8 @@ export const state: AppState = {
   search:  '',
   editing: null,                        // report currently being edited in the form
   syncing: false,
+  contactsPickMode: false,
+  contactsSearch: '',
 };
 
 export function sessionValid(): boolean {

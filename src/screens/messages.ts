@@ -9,6 +9,7 @@ import { refreshSession } from '../auth.js';
 import { toast } from '../ui.js';
 import { currentContact, contactLabel, phoneDigits, contactPickerAvailable } from '../contacts.js';
 import { openContactSheet, pickFromDeviceContacts } from '../components/contatoSheet.js';
+import { openContacts } from './contacts.js';
 
 /* ---------------- SCREEN: MESSAGES (templates) ---------------- */
 export function openMsg() {
@@ -66,19 +67,20 @@ export function renderMsg() {
       <button type="button" class="ph-row" data-ph="{loja}"><code>{loja}</code><span>${esc(state.config.loja)}</span></button>
     </div>`;
 
-  const contatoOpts = ['<option value="">— Sem contato (escolher no WhatsApp) —</option>']
-    .concat(state.contacts.map(c =>
-      `<option value="${c.id}" ${String(c.id) === String(state.contatoId) ? 'selected' : ''}>${esc(contactLabel(c))}${c.phone ? ' · ' + esc(c.phone) : ''}</option>`))
-    .join('');
-
   const contatoBloco = `
     <div class="field">
       <label>Contato (opcional)</label>
-      <select id="ct-sel">${contatoOpts}</select>
+      <button type="button" class="ct-picker" id="ct-open-picker">
+        ${ct
+          ? `<span class="ct-picker-name">${esc(contactLabel(ct))}</span><span class="ct-picker-sub">${ct.phone ? esc(ct.phone) : ''}</span>`
+          : '<span class="ct-picker-placeholder">Toque para escolher um contato</span>'}
+        <span class="ct-go">›</span>
+      </button>
       <div class="ct-buttons">
         ${contactPickerAvailable() ? '<button type="button" class="ct-btn" id="ct-agenda">📇 Da agenda</button>' : ''}
         <button type="button" class="ct-btn" id="ct-novo">➕ Novo contato</button>
         ${ct ? '<button type="button" class="ct-btn" id="ct-edit">✏️ Editar</button>' : ''}
+        ${ct ? '<button type="button" class="ct-btn" id="ct-limpar">✖️ Limpar</button>' : ''}
       </div>
       ${ct && !ct.phone ? '<div class="hint-inline">⚠️ Este contato não tem telefone — o WhatsApp vai abrir para você escolher o destinatário.</div>' : ''}
     </div>`;
@@ -116,8 +118,9 @@ export function renderMsg() {
     </div>`;
 
   byId('btn-back').onclick = () => { state.view = 'list'; render(); };
-  byId('ct-sel').onchange = (e: Event) => { state.contatoId = (e.target as HTMLSelectElement).value || null; render(); };
+  byId('ct-open-picker').onclick = () => openContacts(true);
   byId('ct-novo').onclick = () => openContactSheet(null);
+  if (byId('ct-limpar')) byId('ct-limpar').onclick = () => { state.contatoId = null; render(); };
   if (byId('ct-edit')) byId('ct-edit').onclick = () => openContactSheet(currentContact());
   if (byId('ct-agenda')) byId('ct-agenda').onclick = pickFromDeviceContacts;
   byId('tpl-sel').onchange = (e: Event) => {

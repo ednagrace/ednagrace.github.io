@@ -31,6 +31,18 @@ export interface Contact {
   phone?: string;
   email?: string;
   gender?: '' | 'masculino' | 'feminino' | 'outro';
+  clienteId?: string | number | null;
+  cliente?: Cliente | null;
+}
+
+// Cliente cadastrado no sistema da Edna (sequência, limite do cartão) — separado de Contact
+// (agenda de telefone). Um contato pode ficar vinculado a no máximo um cliente.
+export interface Cliente {
+  id: string | number;
+  sequencia: string;
+  nome?: string | null;
+  telefone?: string | null;
+  limite?: number | string | null;
 }
 
 export interface Template {
@@ -68,7 +80,7 @@ export interface MsgState {
   body: string;
 }
 
-export type ViewName = 'list' | 'form' | 'panel' | 'msg' | 'import';
+export type ViewName = 'list' | 'form' | 'panel' | 'msg' | 'import' | 'contacts';
 
 export interface AppState {
   config: Config;
@@ -87,6 +99,10 @@ export interface AppState {
   editing: Report | null;
   editingNew?: boolean;
   syncing: boolean;
+  // Contacts screen: true when opened as a picker from Messages (tap-to-select-and-return)
+  // instead of from the menu (tap-to-edit). Own search box, separate from the report list's.
+  contactsPickMode: boolean;
+  contactsSearch: string;
 }
 
 export interface WeekTotal {
