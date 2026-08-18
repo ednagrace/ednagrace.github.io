@@ -116,12 +116,15 @@ export async function saveCliente(payload: {
 
 // Registra uma nova nota/evento no histórico de um cliente (proposta aprovada/reprovada, link
 // pendente, nota geral...), feito pelo app — complementa o que veio da digitalização das fotos.
+// Mesmo endpoint de saveCliente (/api/clientes) — o plano Hobby da Vercel limita a 12
+// Serverless Functions por deployment, então isso vive na mesma função, distinguido pelo
+// corpo do POST ({ evento } vs { cliente }).
 export async function addClienteEvento(payload: {
   clienteId: string | number; tipo: string; observacao: string; dataEvento?: string; retornarEm?: string; loja?: string;
 }): Promise<{ ok: boolean; evento?: ClienteEvento; error?: string }> {
   if (!API_BASE || !sessionValid()) return { ok: false, error: 'sem conexão' };
   try {
-    const res = await fetch(apiUrl('/api/cliente-eventos'), {
+    const res = await fetch(apiUrl('/api/clientes'), {
       method: 'POST', headers: authHeaders(), body: JSON.stringify({ evento: payload }),
     });
     if (res.status === 401) { refreshSession(); return { ok: false, error: 'sessão expirada' }; }
