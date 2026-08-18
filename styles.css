@@ -195,6 +195,13 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
   width: 100%; height: 48px; border: 1px solid var(--line); border-radius: 12px;
   padding: 0 12px; background: var(--card); font-weight: 700; font-size: 17px;
 }
+.propostas-badge {
+  flex: none; display: flex; align-items: center; gap: 5px;
+  height: 48px; padding: 0 14px; border-radius: 999px;
+  background: var(--red-soft); color: var(--red-dark);
+  font-size: 13px; font-weight: 600; white-space: nowrap;
+}
+.propostas-badge b { font-size: 18px; font-weight: 800; }
 
 .group { margin-top: 18px; }
 .group > h2 {

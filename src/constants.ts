@@ -34,6 +34,7 @@ export const GROUPS: Group[] = [
 ];
 export const ALL_FIELDS: Field[] = GROUPS.flatMap(g => g.fields);
 export const NUMERIC_KEYS: string[] = ALL_FIELDS.map(f => f.key);
+export const PROPOSTAS_KEYS: string[] = GROUPS.find(g => g.title === 'Propostas')!.fields.map(f => f.key);
 
 export const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
   'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];

@@ -1,5 +1,5 @@
 import type { Field, Report } from '../types.js';
-import { GROUPS, ALL_FIELDS, NUMERIC_KEYS } from '../constants.js';
+import { GROUPS, ALL_FIELDS, NUMERIC_KEYS, PROPOSTAS_KEYS } from '../constants.js';
 import { state, save, sessionValid } from '../state.js';
 import { LS } from '../env.js';
 import { app, render } from '../render.js';
@@ -27,6 +27,15 @@ export function openNew() {
   state.view = 'form';
   render();
   window.scrollTo(0, 0);
+}
+
+function propostasTotal(r: Report): number {
+  return PROPOSTAS_KEYS.reduce((s, k) => s + (informed(r[k]) ? (r[k] as number) : 0), 0);
+}
+
+function updatePropostasBadge(r: Report) {
+  const el = byId('propostas-num');
+  if (el) el.textContent = String(propostasTotal(r));
 }
 
 function blankReport(dataISO: string): Report {
@@ -67,6 +76,7 @@ export function renderForm() {
           <label for="f-data">Data do relatório</label>
           <input id="f-data" type="date" value="${esc(r.data)}" max="${todayISO()}" />
         </div>
+        <div class="propostas-badge" id="propostas-badge">📋 <b id="propostas-num">${propostasTotal(r)}</b> propostas</div>
       </div>
 
       ${groupsHTML}
@@ -177,6 +187,7 @@ function wireCounter(f: Field, r: Report) {
       const dh = byId('dhint-' + f.key);
       if (dh) { dh.textContent = dailyHintText(v); dh.classList.toggle('hit', informed(v) && (v as number) >= metaDiaVal()); }
     }
+    if (PROPOSTAS_KEYS.includes(f.key)) updatePropostasBadge(r);
   }
   // n === null => N/A; a number => that value. Also writes the input (buttons/steppers use this).
   function set(n: number | null) {
