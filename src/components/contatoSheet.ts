@@ -6,6 +6,7 @@ import { openSheet, closeSheet, toast } from '../ui.js';
 import { render } from '../render.js';
 import { esc, byId } from '../format.js';
 import { contactLabel, contactPickerAvailable, saveToDeviceContacts } from '../contacts.js';
+import { eventoLabel } from '../clientes.js';
 import { refreshSession } from '../auth.js';
 
 /* ---------- Contacts: pick from device address book + editor ---------- */
@@ -84,9 +85,17 @@ export function openContactSheet(c: Contact | null) {
             <div><b>${esc(linked.nome || 'Sem nome')}</b> · seq ${esc(linked.sequencia)}</div>
             ${linked.telefone ? `<div class="ct-sub">${esc(linked.telefone)}</div>` : ''}
             ${linked.limite != null ? `<div class="ct-sub">Limite: R$ ${esc(String(linked.limite))}</div>` : ''}
+            ${linked.ultimoEvento ? `<div class="ct-sub">${esc(eventoLabel(linked.ultimoEvento))}</div>` : ''}
           </div>
           <button type="button" class="ct-btn" id="cl-unlink" style="margin-top:8px">✖️ Desvincular</button>`;
-        byId('cl-unlink').onclick = () => { linked = null; renderClSection(); };
+        // Confirmação antes de desfazer: um vínculo errado pode ter sido feito sem querer
+        // (sugestão automática por telefone, ou clique errado na busca), e desvincular não
+        // é óbvio de reverter (o vínculo original pode ter se perdido da tela).
+        byId('cl-unlink').onclick = () => {
+          if (!window.confirm('Desvincular este contato de "' + (linked!.nome || 'seq ' + linked!.sequencia) + '"?\n\nVocê pode vincular de novo depois, buscando o cliente.')) return;
+          linked = null;
+          renderClSection();
+        };
         return;
       }
       box.innerHTML = `

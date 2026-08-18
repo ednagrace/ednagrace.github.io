@@ -1,4 +1,4 @@
-import type { Report, Cliente } from './types.js';
+import type { Report, Cliente, ClienteEvento } from './types.js';
 import { API_BASE, apiUrl } from './env.js';
 import { LS } from './env.js';
 import { state, save, sessionValid } from './state.js';
@@ -68,6 +68,33 @@ export async function searchClientes(q: string): Promise<Cliente[]> {
     const data = await res.json();
     return (data && data.ok && data.clientes) || [];
   } catch (e) { return []; }
+}
+
+// Lista geral do cadastro de clientes da Edna — usada pela tela de Clientes (existem clientes
+// sem contato/telefone vinculado, que nunca apareceriam navegando só pela agenda). Mesmo
+// padrão de pullContacts/pullTemplates: cacheada em state, pra abrir a tela sem tela em branco
+// mesmo offline/antes da resposta chegar.
+export async function pullClientes() {
+  if (!API_BASE || !sessionValid() || !isOnline()) return;
+  try {
+    const res = await fetch(apiUrl('/api/clientes'), { headers: authHeaders() });
+    if (res.status === 401) { refreshSession(); return; }
+    const data = await res.json();
+    if (data && data.ok) { state.clientes = data.clientes || []; save(LS.clientes, state.clientes); }
+  } catch (e) {}
+}
+
+// Detalhe de um cliente: cadastro + histórico completo de eventos (herdado da digitalização
+// das fotos), usado na tela de Clientes ao tocar num cliente.
+export async function getClienteDetalhe(id: string | number): Promise<{ cliente: Cliente; eventos: ClienteEvento[] } | null> {
+  if (!API_BASE || !sessionValid()) return null;
+  try {
+    const res = await fetch(apiUrl('/api/clientes?id=' + encodeURIComponent(String(id))), { headers: authHeaders() });
+    if (res.status === 401) { refreshSession(); return null; }
+    const data = await res.json();
+    if (!data || !data.ok) return null;
+    return { cliente: data.cliente, eventos: data.eventos || [] };
+  } catch (e) { return null; }
 }
 
 /* ---------- WhatsApp message templates ---------- */
@@ -250,6 +277,7 @@ export async function postAuthInit() {
   await pullTemplates();   // pull message templates
   ensureCartaoTemplate();  // make sure "Nosso Cartão" is there to pick from
   pullContacts();          // pull contacts
+  pullClientes();          // pull the client roster (Clientes screen)
   refreshFromCloud(true);
   flushQueue(true);
 }

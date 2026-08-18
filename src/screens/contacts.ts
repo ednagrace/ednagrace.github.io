@@ -4,6 +4,7 @@ import { app, render } from '../render.js';
 import { esc, byId } from '../format.js';
 import { pullContacts } from '../api.js';
 import { contactLabel } from '../contacts.js';
+import { clienteInfoLine } from '../clientes.js';
 import { openContactSheet } from '../components/contatoSheet.js';
 
 /* ---------------- SCREEN: CONTACTS (agenda) ----------------
@@ -70,7 +71,7 @@ function contactRowsHTML(): string {
 }
 
 function contactRowHTML(c: Contact): string {
-  const sub = [c.phone || c.email || '', c.cliente ? `🔗 seq ${esc(c.cliente.sequencia)}` : '']
+  const sub = [c.phone || c.email || '', c.cliente ? '🔗 ' + esc(clienteInfoLine(c.cliente)) : '']
     .filter(Boolean).join(' · ');
   return `
     <div class="contact-row" data-ct="${c.id}">

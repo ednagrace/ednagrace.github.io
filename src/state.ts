@@ -24,6 +24,7 @@ export const state: AppState = {
   session: load(LS.session, {}),        // { token, email, name, exp }
   templates: load(LS.templates, []),    // [{ id, title, body }]
   contacts: load(LS.contacts, []),      // [{ id, name, phone, email, gender }]
+  clientes: load(LS.clientes, []),      // cadastro de clientes da Edna (Clientes screen)
   msg:     { id: null, title: '', body: '' },
   contatoId: null,                      // contact selected on the Messages screen
   imp:     { file: null, fileName: '', sheetUrl: '', preview: null, busy: false },
@@ -34,6 +35,7 @@ export const state: AppState = {
   syncing: false,
   contactsPickMode: false,
   contactsSearch: '',
+  clientesSearch: '',
 };
 
 export function sessionValid(): boolean {

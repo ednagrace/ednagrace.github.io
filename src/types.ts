@@ -35,6 +35,25 @@ export interface Contact {
   cliente?: Cliente | null;
 }
 
+// Fato mais recente sobre um cliente (proposta aprovada/reprovada, link pendente, nota solta...),
+// herdado da digitalização das fotos do caderno da Edna. Ver cliente_eventos no schema do back-end.
+export interface ClienteEvento {
+  id?: string | number;
+  tipo: string;
+  dataEvento?: string | null;
+  retornarEm?: string | null;
+  loja?: string | null;
+  observacao?: string | null;
+  confianca?: 'alta' | 'media' | 'baixa' | null;
+}
+
+// Contato da agenda vinculado a um cliente (visão reduzida, usada dentro de Cliente).
+export interface ContatoResumo {
+  id: string | number;
+  name?: string | null;
+  phone?: string | null;
+}
+
 // Cliente cadastrado no sistema da Edna (sequência, limite do cartão) — separado de Contact
 // (agenda de telefone). Um contato pode ficar vinculado a no máximo um cliente.
 export interface Cliente {
@@ -43,6 +62,10 @@ export interface Cliente {
   nome?: string | null;
   telefone?: string | null;
   limite?: number | string | null;
+  ultimoEvento?: ClienteEvento | null;
+  // Contato da agenda vinculado a este cliente — só presente nas respostas de /api/clientes
+  // (lista/busca/detalhe), não no /api/contacts (lá o vínculo já é o próprio contato).
+  contato?: ContatoResumo | null;
 }
 
 export interface Template {
@@ -80,7 +103,7 @@ export interface MsgState {
   body: string;
 }
 
-export type ViewName = 'list' | 'form' | 'panel' | 'msg' | 'import' | 'contacts';
+export type ViewName = 'list' | 'form' | 'panel' | 'msg' | 'import' | 'contacts' | 'clientes';
 
 export interface AppState {
   config: Config;
@@ -90,6 +113,7 @@ export interface AppState {
   session: Session;
   templates: Template[];
   contacts: Contact[];
+  clientes: Cliente[];
   msg: MsgState;
   contatoId: string | number | null;
   imp: ImportState;
@@ -103,6 +127,8 @@ export interface AppState {
   // instead of from the menu (tap-to-edit). Own search box, separate from the report list's.
   contactsPickMode: boolean;
   contactsSearch: string;
+  // Clientes screen: search box, own from Contacts' (lista geral do cadastro da Edna).
+  clientesSearch: string;
 }
 
 export interface WeekTotal {

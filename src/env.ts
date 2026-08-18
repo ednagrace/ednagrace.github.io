@@ -27,6 +27,7 @@ export const LS = {
   settingsPending: PREFIX + 'settingsPending',
   templates: PREFIX + 'templates',
   contacts: PREFIX + 'contacts',
+  clientes: PREFIX + 'clientes',
 };
 
 // Fixed site config — the same for any browser/device.
