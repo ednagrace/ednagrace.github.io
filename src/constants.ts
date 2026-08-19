@@ -69,35 +69,10 @@ export const SUPORTE_WPP = '5519999974213'; // 55 (BR) + 19 99997-4213
 
 // "Nosso Cartão" link — quick WhatsApp share to clients.
 export const NOSSO_CARTAO_URL = 'https://nossocartaoacs.com.br/nosso-cartao';
-// Title doubles as the de-dup key when auto-creating this template server-side (see api.ts).
-export const CARTAO_TEMPLATE_TITLE = 'Nosso Cartão (link)';
-export const CARTAO_TEMPLATE_BODY =
-  '{saudacao}, {contato}! 💳\n\n' +
-  'Aqui está o link para você solicitar o Nosso Cartão:\n' + NOSSO_CARTAO_URL + '\n\n' +
-  'À disposição!';
 // Independent wording for the menu's quick-send button — no {contato}, since that flow
 // often has no contact selected (would print an empty name right after the greeting).
+// Not tied to any saved template — this button never depended on one, and now nothing does.
 export const CARTAO_QUICK_BODY =
   '{saudacao}! 💳\n\n' +
   'Segue o link para solicitar o Nosso Cartão:\n' + NOSSO_CARTAO_URL + '\n\n' +
   'À disposição!';
-
-// Oferta do plano odontológico Odonto Plus — mesmo esquema do Nosso Cartão (título é a
-// chave de dedup ao criar automaticamente, ver ensureOdontoPlusTemplate em api.ts). Números
-// e benefícios vieram do panfleto oficial do Odonto Plus (sempreodonto, via Nosso Cartão).
-export const ODONTO_PLUS_TEMPLATE_TITLE = 'Odonto Plus (oferta)';
-export const ODONTO_PLUS_TEMPLATE_BODY =
-  '{saudacao}, {contato}! 🦷✨\n\n' +
-  'Quero te apresentar o *Odonto Plus* — o plano odontológico do Nosso Cartão:\n\n' +
-  '🚨 SOS Odonto 24h (teleurgência para dor de dente)\n' +
-  '🎟️ 4 sorteios mensais de R$ 2.500,00\n' +
-  '💊 Até 45% de desconto em medicamentos (Pacheco, São Paulo, Pague Menos, Extrafarma, Raia, Drogasil e mais)\n' +
-  '🦷 Mais de 250 procedimentos: consultas, cirurgias, canal, próteses e mais\n\n' +
-  'Pode incluir até 4 dependentes, sem limite de idade:\n' +
-  '👤 Titular: R$ 32,70/mês\n' +
-  '👥 +1 dependente: R$ 63,00/mês\n' +
-  '👥 +2 dependentes: R$ 91,50/mês\n' +
-  '👥 +3 dependentes: R$ 115,50/mês\n' +
-  '👥 +4 dependentes: R$ 120,30/mês\n\n' +
-  'Quer que eu já faça sua adesão pelo app Nosso Cartão? É rapidinho! 😊\n\n' +
-  '{promotora}';
