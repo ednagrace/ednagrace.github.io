@@ -7,7 +7,7 @@ import { render } from './render.js';
 import { toast } from './ui.js';
 import { parseISO, pad } from './dateUtils.js';
 import { refreshSession } from './auth.js';
-import { CARTAO_TEMPLATE_TITLE, CARTAO_TEMPLATE_BODY } from './constants.js';
+import { CARTAO_TEMPLATE_TITLE, CARTAO_TEMPLATE_BODY, ODONTO_PLUS_TEMPLATE_TITLE, ODONTO_PLUS_TEMPLATE_BODY } from './constants.js';
 
 export function isOnline(): boolean { return navigator.onLine; }
 export function authHeaders(): Record<string, string> {
@@ -154,6 +154,22 @@ export async function ensureCartaoTemplate() {
     const res = await fetch(apiUrl('/api/templates'), {
       method: 'POST', headers: authHeaders(),
       body: JSON.stringify({ template: { title: CARTAO_TEMPLATE_TITLE, body: CARTAO_TEMPLATE_BODY } }),
+    });
+    if (res.status === 401) { refreshSession(); return; }
+    const data = await res.json();
+    if (data && data.ok) await pullTemplates();
+  } catch (e) {}
+}
+
+// Same idea as ensureCartaoTemplate — creates the "Odonto Plus" offer template the first
+// time it's missing, so it's ready-made in the templates list without manual copy-paste.
+export async function ensureOdontoPlusTemplate() {
+  if (!API_BASE || !sessionValid() || !isOnline()) return;
+  if (state.templates.some(t => t.title === ODONTO_PLUS_TEMPLATE_TITLE)) return;
+  try {
+    const res = await fetch(apiUrl('/api/templates'), {
+      method: 'POST', headers: authHeaders(),
+      body: JSON.stringify({ template: { title: ODONTO_PLUS_TEMPLATE_TITLE, body: ODONTO_PLUS_TEMPLATE_BODY } }),
     });
     if (res.status === 401) { refreshSession(); return; }
     const data = await res.json();
@@ -312,6 +328,7 @@ export async function postAuthInit() {
   await pullSettings();    // pull the shared config
   await pullTemplates();   // pull message templates
   ensureCartaoTemplate();  // make sure "Nosso Cartão" is there to pick from
+  ensureOdontoPlusTemplate(); // same for the Odonto Plus offer template
   pullContacts();          // pull contacts
   pullClientes();          // pull the client roster (Clientes screen)
   refreshFromCloud(true);
