@@ -371,9 +371,9 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .check-row span { font-size: 14px; font-weight: 600; color: var(--ink); }
 .check-row small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; margin-top: 3px; }
 
-.msg-actions { display: flex; gap: 10px; margin-top: 8px; }
-.msg-actions .btn-ghost { height: 52px; border: 1.5px solid var(--line); border-radius: 14px; background: #fff; color: var(--muted); font-size: 15px; font-weight: 700; padding: 0 16px; }
-.msg-actions .btn-save { flex: 1; height: 52px; border: none; border-radius: 14px; background: var(--red); color: #fff; font-size: 16px; font-weight: 800; }
+.msg-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.msg-actions .btn-ghost { height: 52px; border: 1.5px solid var(--line); border-radius: 14px; background: #fff; color: var(--muted); font-size: 15px; font-weight: 700; padding: 0 16px; flex: 1 1 auto; }
+.msg-actions .btn-save { flex: 2 1 auto; height: 52px; border: none; border-radius: 14px; background: var(--red); color: #fff; font-size: 16px; font-weight: 800; }
 .msg-actions .btn-save:active { background: var(--red-dark); }
 
 /* ---------- Botão gerar PDF (dentro do formulário) ---------- */

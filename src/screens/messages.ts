@@ -1,3 +1,4 @@
+import type { Contact } from '../types.js';
 import { state, sessionValid } from '../state.js';
 import { app, render } from '../render.js';
 import { pad } from '../dateUtils.js';
@@ -6,7 +7,7 @@ import { isOnline, pullContacts, pullTemplates, authHeaders } from '../api.js';
 import { apiUrl } from '../env.js';
 import { CARTAO_QUICK_BODY } from '../constants.js';
 import { refreshSession } from '../auth.js';
-import { toast } from '../ui.js';
+import { toast, openSheet, closeSheet } from '../ui.js';
 import { currentContact, contactLabel, phoneDigits, contactPickerAvailable } from '../contacts.js';
 import { openContactSheet, pickFromDeviceContacts } from '../components/contatoSheet.js';
 import { openContacts } from './contacts.js';
@@ -33,21 +34,23 @@ function greetingNow(): string {
 }
 // Gender agreement for the contact: masculine → "o", feminine → "a", other/unset → "o(a)".
 // E.g. "atendê-l{oa}" becomes atendê-lo / atendê-la / atendê-lo(a).
-function contactGenderSuffix(): string {
-  const c = currentContact();
-  const g = c && c.gender ? String(c.gender).toLowerCase() : '';
+// `c` undefined = uses the contact currently selected on screen (state.contatoId); pass one
+// explicitly when resolving a template for someone else (ex.: envio em lista).
+function contactGenderSuffix(c?: Contact | null): string {
+  const cc = c !== undefined ? c : currentContact();
+  const g = cc && cc.gender ? String(cc.gender).toLowerCase() : '';
   if (g === 'masculino') return 'o';
   if (g === 'feminino') return 'a';
   return 'o(a)';
 }
-function applyPlaceholders(s: string): string {
+function applyPlaceholders(s: string, contatoOverride?: Contact | null): string {
   const d = new Date();
   const today = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
-  const c = currentContact();
+  const c = contatoOverride !== undefined ? contatoOverride : currentContact();
   return String(s || '')
     .replace(/{saudacao}/gi, greetingNow())
     .replace(/{contato}/gi, c ? ((c.name || '').trim() || contactLabel(c)) : '')
-    .replace(/{oa}/gi, contactGenderSuffix())
+    .replace(/{oa}/gi, contactGenderSuffix(c))
     .replace(/{hoje}/gi, today)
     .replace(/{promotora}/gi, state.config.promotora || '')
     .replace(/{loja}/gi, state.config.loja || '');
@@ -112,6 +115,7 @@ export function renderMsg() {
       </div>
       <div class="msg-actions">
         ${cur.id ? '<button class="btn-ghost" id="tpl-del">🗑️</button>' : ''}
+        <button class="btn-ghost" id="tpl-lista">📋 Lista</button>
         <button class="btn-ghost" id="tpl-save">💾 Salvar</button>
         <button class="btn-save" id="tpl-send">📤 Enviar</button>
       </div>
@@ -147,6 +151,7 @@ export function renderMsg() {
   });
   byId('tpl-save').onclick = saveTemplate;
   byId('tpl-send').onclick = sendTemplate;
+  byId('tpl-lista').onclick = openListaSheet;
   if (byId('tpl-del')) byId('tpl-del').onclick = deleteTemplate;
 }
 
@@ -205,4 +210,131 @@ async function deleteTemplate() {
     render();
     toast('Template excluído', 'ok');
   } catch (e: any) { toast('Erro: ' + e.message, 'err'); }
+}
+
+/* ---------------- Envio em lista (por categoria de cliente) ----------------
+   Categorias derivadas do último evento (cliente_eventos.tipo) do cliente vinculado a cada
+   contato — mesmo dado que já aparece na lista de Contatos, sem precisar cadastrar nada novo.
+   Só entram contatos com telefone (sem telefone não dá pra abrir o WhatsApp). */
+interface ListaCategoria { key: string; label: string; emoji: string; tipos: string[] }
+const LISTA_CATEGORIAS: ListaCategoria[] = [
+  { key: 'cartao-aprovado', emoji: '✅', label: 'Cartão aprovado', tipos: ['cartao-aprovado', 'proposta-aprovada'] },
+  { key: 'link-pendente', emoji: '🔗', label: 'Link pendente', tipos: ['link-pendente'] },
+  { key: 'proposta-reprovada', emoji: '❌', label: 'Proposta reprovada', tipos: ['proposta-reprovada'] },
+];
+function contatosDaCategoria(cat: ListaCategoria): Contact[] {
+  return state.contacts.filter((c) => {
+    if (!c.phone) return false;
+    const ev = c.cliente && c.cliente.ultimoEvento;
+    if (!ev) return false;
+    const tags = String(ev.tipo || '').split(';').map((s) => s.trim());
+    return cat.tipos.some((t) => tags.includes(t));
+  });
+}
+
+// Substitui o conteúdo do sheet já aberto (em vez de abrir um novo por cima) — os passos
+// seguintes (seleção → envio) reaproveitam o mesmo backdrop.
+function setSheetContent(html: string, wire?: () => void) {
+  const sheet = document.querySelector('.sheet');
+  if (!sheet) return;
+  sheet.innerHTML = html;
+  if (wire) wire();
+}
+
+function openListaSheet() {
+  const disponiveis = LISTA_CATEGORIAS
+    .map((cat) => ({ cat, contatos: contatosDaCategoria(cat) }))
+    .filter((x) => x.contatos.length > 0);
+
+  if (!disponiveis.length) {
+    openSheet(`
+      <h2>Enviar em lista</h2>
+      <p class="status-line">Nenhuma categoria disponível ainda. Precisa de contatos vinculados
+      (tela de Contatos) a um cliente com "Cartão aprovado", "Link pendente" ou "Proposta
+      reprovada" no histórico mais recente (tela de Clientes).</p>
+    `);
+    return;
+  }
+
+  openSheet(`
+    <h2>Enviar em lista</h2>
+    <p class="status-line" style="margin:-4px 0 12px">Template atual: <b>${esc(state.msg.title || '(sem título)')}</b>. Escolha a categoria de clientes:</p>
+    ${disponiveis.map(({ cat, contatos }) => `
+      <button type="button" class="menu-item" data-cat="${cat.key}">
+        <span class="mi-ico">${cat.emoji}</span>
+        <span>${esc(cat.label)}<small>${contatos.length} contato(s)</small></span>
+      </button>`).join('')}
+  `, () => {
+    document.querySelectorAll('.sheet [data-cat]').forEach((btn) => {
+      const key = (btn as HTMLElement).getAttribute('data-cat');
+      const found = disponiveis.find((x) => x.cat.key === key);
+      if (found) (btn as HTMLElement).onclick = () => renderListaSelecao(found.cat, found.contatos);
+    });
+  });
+}
+
+function renderListaSelecao(cat: ListaCategoria, contatos: Contact[]) {
+  if (!state.msg.body.trim()) {
+    toast('Escreva ou escolha um template antes de montar a lista', 'err');
+    return;
+  }
+  const selecionados = new Set(contatos.map((c) => String(c.id)));
+  const rowsHTML = contatos.map((c) => `
+    <label class="check-row" data-ctid="${c.id}">
+      <input type="checkbox" checked />
+      <span>${esc(contactLabel(c))}<small>${esc(c.phone || '')}</small></span>
+    </label>`).join('');
+
+  setSheetContent(`
+    <h2>${cat.emoji} ${esc(cat.label)}</h2>
+    <p class="status-line" style="margin:-4px 0 12px">Todos vêm selecionados — desmarque quem não quiser incluir.</p>
+    <div id="lista-rows">${rowsHTML}</div>
+    <div class="actions">
+      <button class="primary" id="lista-comecar" style="flex:1">📤 Começar envio (<span id="lista-count">${selecionados.size}</span>)</button>
+    </div>
+  `, () => {
+    document.querySelectorAll('#lista-rows [data-ctid]').forEach((row) => {
+      const id = row.getAttribute('data-ctid') as string;
+      const box = row.querySelector('input') as HTMLInputElement;
+      box.onchange = () => {
+        if (box.checked) selecionados.add(id); else selecionados.delete(id);
+        const countEl = byId('lista-count');
+        if (countEl) countEl.textContent = String(selecionados.size);
+      };
+    });
+    byId('lista-comecar').onclick = () => {
+      const escolhidos = contatos.filter((c) => selecionados.has(String(c.id)));
+      if (!escolhidos.length) { toast('Selecione ao menos um contato', 'err'); return; }
+      renderListaEnvio(escolhidos, 0);
+    };
+  });
+}
+
+function renderListaEnvio(contatos: Contact[], idx: number) {
+  if (idx >= contatos.length) {
+    setSheetContent(`
+      <h2>Envio concluído</h2>
+      <p class="status-line">${contatos.length} mensagem(ns) processada(s).</p>
+      <div class="actions"><button class="primary" id="lista-fechar" style="flex:1">Fechar</button></div>
+    `, () => { byId('lista-fechar').onclick = () => closeSheet(); });
+    return;
+  }
+  const c = contatos[idx];
+  const txt = applyPlaceholders(state.msg.body, c);
+  setSheetContent(`
+    <h2>Enviando (${idx + 1}/${contatos.length})</h2>
+    <p class="status-line" style="margin:-4px 0 6px"><b>${esc(contactLabel(c))}</b> · ${esc(c.phone || '')}</p>
+    <div class="cl-linked" style="white-space:pre-wrap">${esc(txt)}</div>
+    <div class="actions">
+      <button class="secondary" id="lista-pular">Pular</button>
+      <button class="primary" id="lista-abrir" style="flex:1">📤 Abrir no WhatsApp</button>
+    </div>
+  `, () => {
+    byId('lista-pular').onclick = () => renderListaEnvio(contatos, idx + 1);
+    byId('lista-abrir').onclick = () => {
+      const tel = phoneDigits(c.phone);
+      window.open('https://wa.me/' + tel + '?text=' + encodeURIComponent(txt), '_blank');
+      renderListaEnvio(contatos, idx + 1);
+    };
+  });
 }
