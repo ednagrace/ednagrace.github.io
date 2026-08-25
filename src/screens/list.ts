@@ -234,7 +234,7 @@ function cardHTML(r: Report): string {
   chips.push(`<span class="chip ${bateuDia ? 'ok' : 'neutral'}">✅ ${fmtNA(r.aprovadas)}${bateuDia ? ' 🎯' : ''}</span>`);
   chips.push(`<span class="chip no">❌ ${fmtNA(r.reprovadas)}</span>`);
   if (num(r.link))  chips.push(`<span class="chip">🔗 ${num(r.link)}</span>`);
-  if (num(r.cartaoAtivacao)) chips.push(`<span class="chip">✅ ${num(r.cartaoAtivacao)}</span>`);
+  if (num(r.cartaoAtivacao)) chips.push(`<span class="chip">🔓 ${num(r.cartaoAtivacao)}</span>`);
   const servicos = num(r.sms)+num(r.bonus)+num(r.odontoEfetivado)+num(r.odontoOfertado);
   if (servicos) chips.push(`<span class="chip">⭐ ${servicos}</span>`);
   return `
