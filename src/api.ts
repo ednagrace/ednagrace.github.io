@@ -1,4 +1,4 @@
-import type { Report, Cliente, ClienteEvento } from './types.js';
+import type { Report, Customer, CustomerEvent } from './types.js';
 import { API_BASE, apiUrl } from './env.js';
 import { LS } from './env.js';
 import { state, save, sessionValid } from './state.js';
@@ -46,89 +46,79 @@ export async function apiDelete(dataISO: string) {
   return data;
 }
 
-/* ---------- Contacts ---------- */
-export async function pullContacts() {
+/* ---------- Customers (entidade única: agenda WhatsApp + cadastro Nosso Cartão) ---------- */
+// Lista geral — usada pela tela de Clientes e pelo picker de Mensagens. Mesmo padrão de
+// pullTemplates: cacheada em state, pra abrir a tela sem tela em branco mesmo offline/antes
+// da resposta chegar.
+export async function pullCustomers() {
   if (!API_BASE || !sessionValid() || !isOnline()) return;
   try {
-    const res = await fetch(apiUrl('/api/contacts'), { headers: authHeaders() });
+    const res = await fetch(apiUrl('/api/customers'), { headers: authHeaders() });
     if (res.status === 401) { refreshSession(); return; }
     const data = await res.json();
-    if (data && data.ok) { state.contacts = data.contacts || []; save(LS.contacts, state.contacts); }
+    if (data && data.ok) { state.customers = data.customers || []; save(LS.customers, state.customers); }
   } catch (e) {}
 }
 
-// Live search, not cached in state (results are ephemeral, shown while typing in the
-// cliente-link picker). Empty query short-circuits to avoid listing the whole table.
-export async function searchClientes(q: string): Promise<Cliente[]> {
-  if (!API_BASE || !sessionValid() || !q.trim()) return [];
-  try {
-    const res = await fetch(apiUrl('/api/clientes?q=' + encodeURIComponent(q.trim())), { headers: authHeaders() });
-    if (res.status === 401) { refreshSession(); return []; }
-    const data = await res.json();
-    return (data && data.ok && data.clientes) || [];
-  } catch (e) { return []; }
-}
-
-// Lista geral do cadastro de clientes da Edna — usada pela tela de Clientes (existem clientes
-// sem contato/telefone vinculado, que nunca apareceriam navegando só pela agenda). Mesmo
-// padrão de pullContacts/pullTemplates: cacheada em state, pra abrir a tela sem tela em branco
-// mesmo offline/antes da resposta chegar.
-export async function pullClientes() {
-  if (!API_BASE || !sessionValid() || !isOnline()) return;
-  try {
-    const res = await fetch(apiUrl('/api/clientes'), { headers: authHeaders() });
-    if (res.status === 401) { refreshSession(); return; }
-    const data = await res.json();
-    if (data && data.ok) { state.clientes = data.clientes || []; save(LS.clientes, state.clientes); }
-  } catch (e) {}
-}
-
-// Detalhe de um cliente: cadastro + histórico completo de eventos (herdado da digitalização
-// das fotos), usado na tela de Clientes ao tocar num cliente.
-export async function getClienteDetalhe(id: string | number): Promise<{ cliente: Cliente; eventos: ClienteEvento[] } | null> {
+// Detalhe de um customer: cadastro + histórico completo de eventos (herdado da digitalização
+// das fotos ou registrado pelo app), usado na tela de Clientes ao tocar num customer.
+export async function getCustomerDetalhe(id: string | number): Promise<{ customer: Customer; events: CustomerEvent[] } | null> {
   if (!API_BASE || !sessionValid()) return null;
   try {
-    const res = await fetch(apiUrl('/api/clientes?id=' + encodeURIComponent(String(id))), { headers: authHeaders() });
+    const res = await fetch(apiUrl('/api/customers?id=' + encodeURIComponent(String(id))), { headers: authHeaders() });
     if (res.status === 401) { refreshSession(); return null; }
     const data = await res.json();
     if (!data || !data.ok) return null;
-    return { cliente: data.cliente, eventos: data.eventos || [] };
+    return { customer: data.customer, events: data.events || [] };
   } catch (e) { return null; }
 }
 
-// Cria ou edita um cliente direto (sem passar por um contato) — tela de Clientes.
-// payload.id presente = edita esse cliente; ausente = cria (ou completa, se a sequência já
-// existir — upsert do lado do servidor).
-export async function saveCliente(payload: {
-  id?: string | number; sequencia: string; nome?: string; telefone?: string; limite?: string | number;
-}): Promise<{ ok: boolean; cliente?: Cliente; error?: string }> {
+// Cria ou edita um customer. payload.id presente = edita; ausente = cria (ou completa, se a
+// sequência já existir — upsert do lado do servidor).
+export async function saveCustomer(payload: {
+  id?: string | number; name?: string; phone?: string; email?: string;
+  gender?: string; sequencia?: string; limite?: string | number;
+}): Promise<{ ok: boolean; customer?: Customer; error?: string }> {
   if (!API_BASE || !sessionValid()) return { ok: false, error: 'sem conexão' };
   try {
-    const res = await fetch(apiUrl('/api/clientes'), {
-      method: 'POST', headers: authHeaders(), body: JSON.stringify({ cliente: payload }),
+    const res = await fetch(apiUrl('/api/customers'), {
+      method: 'POST', headers: authHeaders(), body: JSON.stringify({ customer: payload }),
     });
     if (res.status === 401) { refreshSession(); return { ok: false, error: 'sessão expirada' }; }
     const data = await res.json();
-    return data.ok ? { ok: true, cliente: data.cliente } : { ok: false, error: data.error };
+    return data.ok ? { ok: true, customer: data.customer } : { ok: false, error: data.error };
   } catch (e: any) { return { ok: false, error: e.message }; }
 }
 
-// Registra uma nova nota/evento no histórico de um cliente (proposta aprovada/reprovada, link
-// pendente, nota geral...), feito pelo app — complementa o que veio da digitalização das fotos.
-// Mesmo endpoint de saveCliente (/api/clientes) — o plano Hobby da Vercel limita a 12
-// Serverless Functions por deployment, então isso vive na mesma função, distinguido pelo
-// corpo do POST ({ evento } vs { cliente }).
-export async function addClienteEvento(payload: {
-  clienteId: string | number; tipo: string; observacao: string; dataEvento?: string; retornarEm?: string; loja?: string;
-}): Promise<{ ok: boolean; evento?: ClienteEvento; error?: string }> {
+// Exclui um customer.
+export async function deleteCustomer(id: string | number): Promise<{ ok: boolean; error?: string }> {
   if (!API_BASE || !sessionValid()) return { ok: false, error: 'sem conexão' };
   try {
-    const res = await fetch(apiUrl('/api/clientes'), {
-      method: 'POST', headers: authHeaders(), body: JSON.stringify({ evento: payload }),
+    const res = await fetch(apiUrl('/api/customers?id=' + encodeURIComponent(String(id))), {
+      method: 'DELETE', headers: authHeaders(),
     });
     if (res.status === 401) { refreshSession(); return { ok: false, error: 'sessão expirada' }; }
     const data = await res.json();
-    return data.ok ? { ok: true, evento: data.evento } : { ok: false, error: data.error };
+    return data.ok ? { ok: true } : { ok: false, error: data.error };
+  } catch (e: any) { return { ok: false, error: e.message }; }
+}
+
+// Registra uma nova nota/evento no histórico de um customer (proposta aprovada/reprovada, link
+// pendente, nota geral...), feito pelo app — complementa o que veio da digitalização das fotos.
+// Mesmo endpoint de saveCustomer (/api/customers) — o plano Hobby da Vercel limita a 12
+// Serverless Functions por deployment, então isso vive na mesma função, distinguido pelo
+// corpo do POST ({ event } vs { customer }).
+export async function addCustomerEvent(payload: {
+  customerId: string | number; tipo: string; observacao: string; dataEvento?: string; retornarEm?: string; loja?: string;
+}): Promise<{ ok: boolean; event?: CustomerEvent; error?: string }> {
+  if (!API_BASE || !sessionValid()) return { ok: false, error: 'sem conexão' };
+  try {
+    const res = await fetch(apiUrl('/api/customers'), {
+      method: 'POST', headers: authHeaders(), body: JSON.stringify({ event: payload }),
+    });
+    if (res.status === 401) { refreshSession(); return { ok: false, error: 'sessão expirada' }; }
+    const data = await res.json();
+    return data.ok ? { ok: true, event: data.event } : { ok: false, error: data.error };
   } catch (e: any) { return { ok: false, error: e.message }; }
 }
 
@@ -293,8 +283,7 @@ export async function postAuthInit() {
   await flushSettings();   // send pending local changes (merged server-side)
   await pullSettings();    // pull the shared config
   await pullTemplates();   // pull message templates
-  pullContacts();          // pull contacts
-  pullClientes();          // pull the client roster (Clientes screen)
+  pullCustomers();         // pull the customer roster (Clientes screen + Messages picker)
   refreshFromCloud(true);
   flushQueue(true);
 }

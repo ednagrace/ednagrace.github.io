@@ -25,19 +25,10 @@ export interface Report {
   [key: string]: string | number | boolean | null | undefined;
 }
 
-export interface Contact {
-  id?: string | number;
-  name?: string;
-  phone?: string;
-  email?: string;
-  gender?: '' | 'masculino' | 'feminino' | 'outro';
-  clienteId?: string | number | null;
-  cliente?: Cliente | null;
-}
-
-// Fato mais recente sobre um cliente (proposta aprovada/reprovada, link pendente, nota solta...),
-// herdado da digitalização das fotos do caderno da Edna. Ver cliente_eventos no schema do back-end.
-export interface ClienteEvento {
+// Fato mais recente sobre um customer (proposta aprovada/reprovada, link pendente, nota
+// solta...), herdado da digitalização das fotos do caderno da Edna ou registrado pelo app.
+// Ver customer_events no schema do back-end.
+export interface CustomerEvent {
   id?: string | number;
   tipo: string;
   dataEvento?: string | null;
@@ -47,25 +38,19 @@ export interface ClienteEvento {
   confianca?: 'alta' | 'media' | 'baixa' | null;
 }
 
-// Contato da agenda vinculado a um cliente (visão reduzida, usada dentro de Cliente).
-export interface ContatoResumo {
-  id: string | number;
+// Customer: entidade única que funde o antigo "contato" (agenda de WhatsApp) com o antigo
+// "cliente" (cadastro Nosso Cartão — sequência, limite). Todos os campos são opcionais: nem
+// todo customer tem sequência/limite (não é cliente formal), nem todo customer tem
+// telefone/email (cadastro antigo, sem contato).
+export interface Customer {
+  id?: string | number;
   name?: string | null;
   phone?: string | null;
-}
-
-// Cliente cadastrado no sistema da Edna (sequência, limite do cartão) — separado de Contact
-// (agenda de telefone). Um contato pode ficar vinculado a no máximo um cliente.
-export interface Cliente {
-  id: string | number;
-  sequencia: string;
-  nome?: string | null;
-  telefone?: string | null;
+  email?: string | null;
+  gender?: '' | 'masculino' | 'feminino' | 'outro' | null;
+  sequencia?: string | null;
   limite?: number | string | null;
-  ultimoEvento?: ClienteEvento | null;
-  // Contato da agenda vinculado a este cliente — só presente nas respostas de /api/clientes
-  // (lista/busca/detalhe), não no /api/contacts (lá o vínculo já é o próprio contato).
-  contato?: ContatoResumo | null;
+  ultimoEvento?: CustomerEvent | null;
 }
 
 export interface Template {
@@ -103,7 +88,7 @@ export interface MsgState {
   body: string;
 }
 
-export type ViewName = 'list' | 'form' | 'panel' | 'msg' | 'import' | 'contacts' | 'clientes';
+export type ViewName = 'list' | 'form' | 'panel' | 'msg' | 'import' | 'customers';
 
 export interface AppState {
   config: Config;
@@ -112,10 +97,9 @@ export interface AppState {
   metas: Record<string, number>;
   session: Session;
   templates: Template[];
-  contacts: Contact[];
-  clientes: Cliente[];
+  customers: Customer[];
   msg: MsgState;
-  contatoId: string | number | null;
+  customerId: string | number | null;
   imp: ImportState;
   view: ViewName;
   month: string; // 'YYYY-MM'
@@ -123,12 +107,14 @@ export interface AppState {
   editing: Report | null;
   editingNew?: boolean;
   syncing: boolean;
-  // Contacts screen: true when opened as a picker from Messages (tap-to-select-and-return)
-  // instead of from the menu (tap-to-edit). Own search box, separate from the report list's.
-  contactsPickMode: boolean;
-  contactsSearch: string;
-  // Clientes screen: search box, own from Contacts' (lista geral do cadastro da Edna).
-  clientesSearch: string;
+  // Customers screen: true when opened as a picker from Messages (tap-to-select-and-return)
+  // instead of from the menu (tap-to-open-detail). Own search box, separate from the report
+  // list's.
+  customersPickMode: boolean;
+  customersSearch: string;
+  // Padrão: só mostra quem "parece WhatsApp" (looksLikeWhatsApp) — existem customers sem
+  // telefone, ou com telefone fixo, que nunca receberiam mensagem por esta tela.
+  customersWhatsappOnly: boolean;
 }
 
 export interface WeekTotal {

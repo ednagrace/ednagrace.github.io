@@ -23,19 +23,18 @@ export const state: AppState = {
   metas:   load(LS.metas, {}),          // { 'YYYY-MM': number }
   session: load(LS.session, {}),        // { token, email, name, exp }
   templates: load(LS.templates, []),    // [{ id, title, body }]
-  contacts: load(LS.contacts, []),      // [{ id, name, phone, email, gender }]
-  clientes: load(LS.clientes, []),      // cadastro de clientes da Edna (Clientes screen)
+  customers: load(LS.customers, []),    // cadastro unificado (Clientes screen + agenda WhatsApp)
   msg:     { id: null, title: '', body: '' },
-  contatoId: null,                      // contact selected on the Messages screen
+  customerId: null,                     // customer selected on the Messages screen
   imp:     { file: null, fileName: '', sheetUrl: '', preview: null, busy: false },
   view:    'list',
   month:   currentMonthKey(),
   search:  '',
   editing: null,                        // report currently being edited in the form
   syncing: false,
-  contactsPickMode: false,
-  contactsSearch: '',
-  clientesSearch: '',
+  customersPickMode: false,
+  customersSearch: '',
+  customersWhatsappOnly: true,
 };
 
 export function sessionValid(): boolean {

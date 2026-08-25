@@ -5,8 +5,7 @@ import { renderPanel } from './screens/panel.js';
 import { renderMsg } from './screens/messages.js';
 import { renderImport } from './screens/import.js';
 import { renderList } from './screens/list.js';
-import { renderContacts } from './screens/contacts.js';
-import { renderClientes } from './screens/clientes.js';
+import { renderCustomers } from './screens/customers.js';
 
 export const app = document.getElementById('app') as HTMLElement;
 
@@ -16,7 +15,6 @@ export function render() {
   if (state.view === 'panel') return renderPanel();
   if (state.view === 'msg') return renderMsg();
   if (state.view === 'import') return renderImport();
-  if (state.view === 'contacts') return renderContacts();
-  if (state.view === 'clientes') return renderClientes();
+  if (state.view === 'customers') return renderCustomers();
   return renderList();
 }

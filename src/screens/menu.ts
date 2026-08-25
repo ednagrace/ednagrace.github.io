@@ -19,8 +19,7 @@ import {
 import { openPanel } from './panel.js';
 import { openImport } from './import.js';
 import { openMsg, sendCartaoLink } from './messages.js';
-import { openContacts } from './contacts.js';
-import { openClientes } from './clientes.js';
+import { openCustomers } from './customers.js';
 import { pushSupported, currentPushSubscription, subscribeToPush, unsubscribeFromPush } from '../push.js';
 
 /* ---------------- MENU / SETTINGS ---------------- */
@@ -51,13 +50,9 @@ export function openMenu() {
       <span class="mi-ico">📝</span>
       <span>Mensagens<small>Templates de WhatsApp</small></span>
     </button>
-    <button class="menu-item" id="mi-contacts">
-      <span class="mi-ico">📇</span>
-      <span>Contatos<small>Agenda · vincular a um cliente cadastrado</small></span>
-    </button>
     <button class="menu-item" id="mi-clientes">
       <span class="mi-ico">🗂️</span>
-      <span>Clientes<small>Cadastro da Edna · inclui quem não tem telefone</small></span>
+      <span>Clientes<small>Cadastro + agenda de WhatsApp, tudo num só lugar</small></span>
     </button>
     <button class="menu-item" id="mi-config">
       <span class="mi-ico">🔧</span>
@@ -106,8 +101,7 @@ export function openMenu() {
     byId('mi-share').onclick = () => { closeSheet(); shareToday(); };
     byId('mi-cartao').onclick = () => { closeSheet(); sendCartaoLink(); };
     byId('mi-msg').onclick = () => { closeSheet(); openMsg(); };
-    byId('mi-contacts').onclick = () => { closeSheet(); openContacts(); };
-    byId('mi-clientes').onclick = () => { closeSheet(); openClientes(); };
+    byId('mi-clientes').onclick = () => { closeSheet(); openCustomers(); };
     byId('mi-logout').onclick = () => { closeSheet(); logout(); };
     const st = byId('cfg-status');
     st.textContent = API_BASE ? '✓ Conectado ao servidor' : '⚠ Servidor não configurado';
