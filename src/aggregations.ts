@@ -8,8 +8,13 @@ import { reportsForView } from './api.js';
 
 /* ---------- Monthly goal ---------- */
 export function metaFor(monthKey: string): number {
-  // if the month hasn't had a goal set yet, use the default (22)
-  return monthKey in state.metas ? (Number(state.metas[monthKey]) || 0) : DEFAULT_META;
+  if (monthKey in state.metas) return Number(state.metas[monthKey]) || 0;
+  // No goal set for this month yet: carry forward the most recent EARLIER month's goal
+  // (the goal only changes when someone edits it — it doesn't reset to the default every
+  // month). Only falls back to the default (22) if no goal was ever set before this month.
+  const earlier = Object.keys(state.metas).filter(k => k < monthKey).sort();
+  if (earlier.length) return Number(state.metas[earlier[earlier.length - 1]]) || 0;
+  return DEFAULT_META;
 }
 export function metaDiaVal(): number { return Number(state.config.metaDia) || 3; } // daily goal (default 3)
 export function setMeta(monthKey: string, val: any) {

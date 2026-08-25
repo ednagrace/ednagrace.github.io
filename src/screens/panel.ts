@@ -1,7 +1,7 @@
 import { ALL_FIELDS, MONTHS } from '../constants.js';
 import { state } from '../state.js';
 import { app, render } from '../render.js';
-import { pad, parseISO } from '../dateUtils.js';
+import { pad, parseISO, currentMonthKey } from '../dateUtils.js';
 import { esc, fmtNA, byId } from '../format.js';
 import { metaFor, monthTotals, weeklyBreakdown } from '../aggregations.js';
 import { shareMonthPDF } from '../pdf.js';
@@ -90,7 +90,7 @@ export function renderPanel() {
       <div class="month-nav">
         <button id="prev-month" aria-label="Mês anterior">‹</button>
         <div class="label">${MONTHS[m-1]} ${y}</div>
-        <button id="next-month" aria-label="Próximo mês">›</button>
+        <button id="next-month" aria-label="Próximo mês" ${monthKey >= currentMonthKey() ? 'disabled' : ''}>›</button>
       </div>
 
       <div class="meta-card">

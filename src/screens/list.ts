@@ -3,7 +3,7 @@ import { MONTHS, MONTHS_SHORT } from '../constants.js';
 import { state, save } from '../state.js';
 import { LS } from '../env.js';
 import { app, render } from '../render.js';
-import { pad, parseISO, monthKeyOf, weekday } from '../dateUtils.js';
+import { pad, parseISO, monthKeyOf, weekday, currentMonthKey } from '../dateUtils.js';
 import { esc, num, fmtNA, informed } from '../format.js';
 import { isOnline, reportsForView, getReport, flushQueue, deleteReportNow } from '../api.js';
 import { metaFor, metaDiaVal, aprovadasNoMes, isBirthday, ageToday, setMeta } from '../aggregations.js';
@@ -67,7 +67,7 @@ export function renderList() {
       <div class="month-nav">
         <button id="prev-month" aria-label="Mês anterior">‹</button>
         <div class="label">${MONTHS[m-1]} ${y}</div>
-        <button id="next-month" aria-label="Próximo mês">›</button>
+        <button id="next-month" aria-label="Próximo mês" ${monthKey >= currentMonthKey() ? 'disabled' : ''}>›</button>
       </div>
 
       <button type="button" class="pdf-btn" id="btn-sheet-month">📗 Planilha do Google · ${MONTHS[m-1]} ${y}</button>
@@ -268,7 +268,16 @@ export function shiftMonth(delta: number) {
   m += delta;
   if (m < 1) { m = 12; y--; }
   if (m > 12) { m = 1; y++; }
-  state.month = y + '-' + pad(m);
+  const next = y + '-' + pad(m);
+  if (next > currentMonthKey()) return; // no navigating into future months
+  // Advancing into a month with no goal of its own yet: copy the current goal forward as
+  // ITS OWN value (not a live reference) — each month's goal is independent from here on,
+  // so editing an earlier month later won't retroactively change this one.
+  if (delta > 0 && !(next in state.metas)) {
+    setMeta(next, metaFor(state.month));
+    saveSettingsRemote();
+  }
+  state.month = next;
   render();
 }
 

@@ -111,6 +111,7 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 }
 .month-nav button { background: none; border: none; font-size: 22px; width: 44px; height: 44px; border-radius: 12px; color: var(--red); }
 .month-nav button:active { background: var(--red-soft); }
+.month-nav button:disabled { opacity: .3; }
 .month-nav .label { flex: 1; text-align: center; font-weight: 700; text-transform: capitalize; }
 
 .search { position: relative; margin-bottom: 12px; }
