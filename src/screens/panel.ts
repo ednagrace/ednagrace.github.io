@@ -48,7 +48,6 @@ export function renderPanel() {
     { label: 'Aprovadas', value: (t.aprovadas as number) || 0, color: '#0ca30c' },
     { label: 'Reprovadas', value: (t.reprovadas as number) || 0, color: '#d03b3b' },
     { label: 'Em Análise', value: (t.analise as number) || 0, color: '#c98500' },
-    { label: 'Pendências', value: (t.pendencias as number) || 0, color: '#e0662f' },
   ];
   const propTotal = propSegs.reduce((s, x) => s + x.value, 0);
   const legend = propSegs.map(s => `
@@ -135,9 +134,9 @@ export function shareMonth(monthKey: string) {
   let txt = `📊 *Resumo do mês — ${MONTHS[m-1]} ${y}*\n`;
   txt += `🏪 ${state.config.loja} · 👤 ${state.config.promotora}\n`;
   txt += `📅 ${t._dias} dia(s) com relatório\n\n`;
-  txt += `*Propostas*\n✅ Aprovadas: ${t.aprovadas}\n❌ Reprovadas: ${t.reprovadas}\n🔍 Em análise: ${t.analise}\n⏳ Pendências: ${t.pendencias}\n\n`;
-  txt += `🔗 Links: ${t.link}\n💳 Cartão — 📦 ${t.cartaoEntregas} entregas · 🕓 ${t.cartaoReceber} a receber\n\n`;
-  txt += `*Serviços*\n💬 SMS: ${t.sms}\n🎁 Bônus: ${t.bonus}\n📄 Fatura Digital: ${t.faturaDigital}\n🦷 Odonto Plus: ${t.odontoPlus}\n`;
+  txt += `*Propostas*\n✅ Aprovadas: ${t.aprovadas}\n❌ Reprovadas: ${t.reprovadas}\n🔍 Em análise: ${t.analise}\n\n`;
+  txt += `🔗 Links: ${t.link}\n💳 Cartão — ✅ ${t.cartaoAtivacao} ativação\n\n`;
+  txt += `*Serviços*\n💬 SMS: ${t.sms}\n🎁 Bônus: ${t.bonus}\n🦷 Odonto Efetivado: ${t.odontoEfetivado}\n📣 Odonto Ofertado: ${t.odontoOfertado}\n`;
   if (meta) txt += `\n🎯 Meta: ${t.aprovadas}/${meta} aprovados (${Math.round(((t.aprovadas as number) / meta) * 100)}%)\n`;
   if (weeks.length) {
     txt += `\n*Aprovadas por semana*\n`;

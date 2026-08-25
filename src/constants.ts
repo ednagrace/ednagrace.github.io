@@ -5,10 +5,8 @@ export const GROUPS: Group[] = [
   {
     title: 'Propostas', emoji: '📋', fields: [
       { key: 'aprovadas',  label: 'Aprovadas',   emoji: '✅', dailyMeta: true },
-      { key: 'preAprovado',label: 'Pré-Aprovado',emoji: '🟡' },
       { key: 'reprovadas', label: 'Reprovadas',  emoji: '❌' },
       { key: 'analise',    label: 'Em Análise',  emoji: '🔍' },
-      { key: 'pendencias', label: 'Pendências',  emoji: '⏳' },
     ]
   },
   {
@@ -18,17 +16,15 @@ export const GROUPS: Group[] = [
   },
   {
     title: 'Cartão', emoji: '💳', fields: [
-      { key: 'cartaoEntregas', label: 'Entregas',  emoji: '📦' },
-      { key: 'cartaoReceber',  label: 'A Receber', emoji: '🕓' },
       { key: 'cartaoAtivacao', label: 'Ativação',  emoji: '✅' },
     ]
   },
   {
     title: 'Serviços', emoji: '⭐', fields: [
-      { key: 'sms',           label: 'SMS',            emoji: '💬' },
-      { key: 'bonus',         label: 'Bônus',          emoji: '🎁' },
-      { key: 'faturaDigital', label: 'Fatura Digital', emoji: '📄' },
-      { key: 'odontoPlus',    label: 'Odonto Plus',    emoji: '🦷' },
+      { key: 'sms',             label: 'SMS',             emoji: '💬' },
+      { key: 'bonus',           label: 'Bônus',           emoji: '🎁' },
+      { key: 'odontoEfetivado', label: 'Odonto Efetivado',emoji: '🦷' },
+      { key: 'odontoOfertado',  label: 'Odonto Ofertado', emoji: '📣' },
     ]
   },
 ];

@@ -167,7 +167,6 @@ function buildMonthPDF(monthKey: string): Blob {
     { label: 'Aprovadas', value: t.aprovadas || 0, color: [0.047, 0.639, 0.047] as RGB01 },
     { label: 'Reprovadas', value: t.reprovadas || 0, color: [0.816, 0.231, 0.231] as RGB01 },
     { label: 'Em Análise', value: t.analise || 0, color: [0.788, 0.522, 0.000] as RGB01 },
-    { label: 'Pendências', value: t.pendencias || 0, color: [0.878, 0.400, 0.184] as RGB01 },
   ];
   const pieTotal = PIE.reduce((s, x) => s + (x.value as number), 0);
 

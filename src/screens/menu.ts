@@ -348,10 +348,10 @@ function shareToday() {
   let txt = `📋 *Relatório Diário — ${state.config.loja}*\n`;
   txt += `👤 ${state.config.promotora}\n`;
   txt += `📅 ${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}\n\n`;
-  txt += `*Propostas*\n✅ Aprovadas: ${r.aprovadas ?? '—'}\n🟡 Pré-aprovado: ${r.preAprovado ?? '—'}\n❌ Reprovadas: ${r.reprovadas ?? '—'}\n🔍 Em análise: ${r.analise ?? '—'}\n⏳ Pendências: ${r.pendencias ?? '—'}\n\n`;
+  txt += `*Propostas*\n✅ Aprovadas: ${r.aprovadas ?? '—'}\n❌ Reprovadas: ${r.reprovadas ?? '—'}\n🔍 Em análise: ${r.analise ?? '—'}\n\n`;
   txt += `🔗 Link: ${r.link ?? '—'}\n`;
-  txt += `💳 Cartão — 📦 Entregas: ${r.cartaoEntregas ?? '—'} | 🕓 A receber: ${r.cartaoReceber ?? '—'} | ✅ Ativação: ${r.cartaoAtivacao ?? '—'}\n\n`;
-  txt += `*Serviços*\n💬 SMS: ${r.sms ?? '—'}\n🎁 Bônus: ${r.bonus ?? '—'}\n📄 Fatura Digital: ${r.faturaDigital ?? '—'}\n🦷 Odonto Plus: ${r.odontoPlus ?? '—'}\n`;
+  txt += `💳 Cartão — ✅ Ativação: ${r.cartaoAtivacao ?? '—'}\n\n`;
+  txt += `*Serviços*\n💬 SMS: ${r.sms ?? '—'}\n🎁 Bônus: ${r.bonus ?? '—'}\n🦷 Odonto Efetivado: ${r.odontoEfetivado ?? '—'}\n📣 Odonto Ofertado: ${r.odontoOfertado ?? '—'}\n`;
   if (r.obs) txt += `\n🗒️ Obs: ${r.obs}\n`;
   if (meta) txt += `\n🎯 Meta do mês: ${feitas}/${meta} aprovados\n`;
 
