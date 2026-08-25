@@ -16,7 +16,7 @@ export const GROUPS: Group[] = [
   },
   {
     title: 'Cartão', emoji: '💳', fields: [
-      { key: 'cartaoAtivacao', label: 'Ativação',  emoji: '🔓' },
+      { key: 'cartaoAtivacao', label: 'Ativação',  emoji: '🔑' },
     ]
   },
   {
@@ -56,7 +56,7 @@ export const ALLOWLIST = [
 ];
 
 export const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-export const APP_VERSION = 'v56'; // bump together with sw.js's CACHE on every release
+export const APP_VERSION = 'v57'; // bump together with sw.js's CACHE on every release
 export const ADMIN_EMAIL = 'jpantunesdesouza@gmail.com';
 
 export const DEFAULT_META = 22; // default monthly goal for approved proposals (editable)

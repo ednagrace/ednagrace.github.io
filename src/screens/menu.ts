@@ -350,7 +350,7 @@ function shareToday() {
   txt += `📅 ${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}\n\n`;
   txt += `*Propostas*\n✅ Aprovadas: ${r.aprovadas ?? '—'}\n❌ Reprovadas: ${r.reprovadas ?? '—'}\n🔍 Em análise: ${r.analise ?? '—'}\n\n`;
   txt += `🔗 Link: ${r.link ?? '—'}\n`;
-  txt += `💳 Cartão — 🔓 Ativação: ${r.cartaoAtivacao ?? '—'}\n\n`;
+  txt += `💳 Cartão — 🔑 Ativação: ${r.cartaoAtivacao ?? '—'}\n\n`;
   txt += `*Serviços*\n💬 SMS: ${r.sms ?? '—'}\n🎁 Bônus: ${r.bonus ?? '—'}\n🦷 Odonto Efetivado: ${r.odontoEfetivado ?? '—'}\n📣 Odonto Ofertado: ${r.odontoOfertado ?? '—'}\n`;
   if (r.obs) txt += `\n🗒️ Obs: ${r.obs}\n`;
   if (meta) txt += `\n🎯 Meta do mês: ${feitas}/${meta} aprovados\n`;

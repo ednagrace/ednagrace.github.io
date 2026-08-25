@@ -135,7 +135,7 @@ export function shareMonth(monthKey: string) {
   txt += `🏪 ${state.config.loja} · 👤 ${state.config.promotora}\n`;
   txt += `📅 ${t._dias} dia(s) com relatório\n\n`;
   txt += `*Propostas*\n✅ Aprovadas: ${t.aprovadas}\n❌ Reprovadas: ${t.reprovadas}\n🔍 Em análise: ${t.analise}\n\n`;
-  txt += `🔗 Links: ${t.link}\n💳 Cartão — 🔓 ${t.cartaoAtivacao} ativação\n\n`;
+  txt += `🔗 Links: ${t.link}\n💳 Cartão — 🔑 ${t.cartaoAtivacao} ativação\n\n`;
   txt += `*Serviços*\n💬 SMS: ${t.sms}\n🎁 Bônus: ${t.bonus}\n🦷 Odonto Efetivado: ${t.odontoEfetivado}\n📣 Odonto Ofertado: ${t.odontoOfertado}\n`;
   if (meta) txt += `\n🎯 Meta: ${t.aprovadas}/${meta} aprovados (${Math.round(((t.aprovadas as number) / meta) * 100)}%)\n`;
   if (weeks.length) {
