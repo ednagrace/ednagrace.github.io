@@ -12,6 +12,7 @@ type RGB01 = [number, number, number];
 const PDF = {
   RED: [0.91, 0.45, 0.31] as RGB01, WHITE: [1, 1, 1] as RGB01, INK: [0.11, 0.11, 0.14] as RGB01,
   MUTED: [0.42, 0.45, 0.50] as RGB01, LIGHT: [0.88, 0.89, 0.91] as RGB01, GREEN: [0.12, 0.62, 0.34] as RGB01,
+  BLUE: [0.114, 0.475, 0.780] as RGB01, BLUE_DARK: [0.055, 0.318, 0.573] as RGB01,
 };
 function pdfEsc(s: any): string { return String(s).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)'); }
 function latin1(s: any): string { return String(s).replace(/[^\x00-\xFF]/g, ''); } // strip anything that isn't Latin-1 (e.g. emoji)
@@ -39,34 +40,7 @@ function buildReportPDF(r: Report): Blob {
   const feitas = aprovadasNoMes(mk);
   const pct = meta > 0 ? Math.round((feitas / meta) * 100) : 0;
 
-  let c = '';
-  const F1 = 'F1', F2 = 'F2';
-  const txt = (x: number, y: number, size: number, font: string, color: RGB01, s: any) => {
-    const [rr, gg, bb] = color;
-    c += `BT /${font} ${size} Tf ${rr} ${gg} ${bb} rg ${x} ${y} Td (${pdfEsc(latin1(s))}) Tj ET\n`;
-  };
-  const rect = (x: number, y: number, w: number, h: number, color: RGB01) => { const [rr, gg, bb] = color; c += `${rr} ${gg} ${bb} rg ${x} ${y} ${w} ${h} re f\n`; };
-  const line = (x1: number, y: number, x2: number, color: RGB01) => { const [rr, gg, bb] = color; c += `${rr} ${gg} ${bb} RG 0.6 w ${x1} ${y} m ${x2} ${y} l S\n`; };
-  // Rounded card background — 4 straight edges + 4 Bézier corner arcs (k ≈ 0.5523 * r).
-  const roundedRect = (x: number, y: number, w: number, h: number, r: number, color: RGB01) => {
-    const [rr, gg, bb] = color, k = 0.5523 * r;
-    c += `${rr} ${gg} ${bb} rg `
-      + `${x + r} ${y} m ${x + w - r} ${y} l `
-      + `${x + w - r + k} ${y} ${x + w} ${y + r - k} ${x + w} ${y + r} c ${x + w} ${y + h - r} l `
-      + `${x + w} ${y + h - r + k} ${x + w - r + k} ${y + h} ${x + w - r} ${y + h} c ${x + r} ${y + h} l `
-      + `${x + r - k} ${y + h} ${x} ${y + h - r + k} ${x} ${y + h - r} c ${x} ${y + r} l `
-      + `${x} ${y + r - k} ${x + r - k} ${y} ${x + r} ${y} c f\n`;
-  };
-  // Filled dot — 4 Bézier quarter-arcs around the center (same k constant as roundedRect).
-  const dot = (cx: number, cy: number, R: number, color: RGB01) => {
-    const [rr, gg, bb] = color, k = 0.5523 * R;
-    c += `${rr} ${gg} ${bb} rg `
-      + `${cx + R} ${cy} m ${cx + R} ${cy + k} ${cx + k} ${cy + R} ${cx} ${cy + R} c `
-      + `${cx - k} ${cy + R} ${cx - R} ${cy + k} ${cx - R} ${cy} c `
-      + `${cx - R} ${cy - k} ${cx - k} ${cy - R} ${cx} ${cy - R} c `
-      + `${cx + k} ${cy - R} ${cx + R} ${cy - k} ${cx + R} ${cy} c f\n`;
-  };
-
+  return pdfBuild(({ txt, rect, line, roundedRect, dot, F1, F2 }) => {
   // Page background (the white cards need something other than white to stand out against).
   rect(0, 0, 595, 792, PAGE_BG);
   // Red header band
@@ -147,8 +121,7 @@ function buildReportPDF(r: Report): Blob {
   let quando = '';
   try { quando = new Date().toLocaleString('pt-BR'); } catch (e) {}
   txt(40, 18, 9, F1, PDF.MUTED, 'Gerado em ' + quando + '  ·  App Relatório Diário');
-
-  return assemblePdf(c);
+  });
 }
 
 function assemblePdf(c: string): Blob {
@@ -188,6 +161,8 @@ function pdfBuild(draw: (helpers: {
   rect: (x: number, y: number, w: number, h: number, color: RGB01) => void;
   line: (x1: number, y: number, x2: number, color: RGB01) => void;
   sector: (cx: number, cy: number, R: number, a0: number, a1: number, color: RGB01) => void;
+  roundedRect: (x: number, y: number, w: number, h: number, r: number, color: RGB01) => void;
+  dot: (cx: number, cy: number, R: number, color: RGB01) => void;
   F1: string; F2: string;
 }) => void): Blob {
   let c = '';
@@ -195,6 +170,25 @@ function pdfBuild(draw: (helpers: {
   const txt = (x: number, y: number, size: number, font: string, color: RGB01, s: any) => { const [r, g, b] = color; c += `BT /${font} ${size} Tf ${r} ${g} ${b} rg ${x} ${y} Td (${pdfEsc(latin1(s))}) Tj ET\n`; };
   const rect = (x: number, y: number, w: number, h: number, color: RGB01) => { const [r, g, b] = color; c += `${r} ${g} ${b} rg ${x} ${y} ${w} ${h} re f\n`; };
   const line = (x1: number, y: number, x2: number, color: RGB01) => { const [r, g, b] = color; c += `${r} ${g} ${b} RG 0.6 w ${x1} ${y} m ${x2} ${y} l S\n`; };
+  // Rounded card background — 4 straight edges + 4 Bézier corner arcs (k ≈ 0.5523 * r).
+  const roundedRect = (x: number, y: number, w: number, h: number, r: number, color: RGB01) => {
+    const [rr, gg, bb] = color, k = 0.5523 * r;
+    c += `${rr} ${gg} ${bb} rg `
+      + `${x + r} ${y} m ${x + w - r} ${y} l `
+      + `${x + w - r + k} ${y} ${x + w} ${y + r - k} ${x + w} ${y + r} c ${x + w} ${y + h - r} l `
+      + `${x + w} ${y + h - r + k} ${x + w - r + k} ${y + h} ${x + w - r} ${y + h} c ${x + r} ${y + h} l `
+      + `${x + r - k} ${y + h} ${x} ${y + h - r + k} ${x} ${y + h - r} c ${x} ${y + r} l `
+      + `${x} ${y + r - k} ${x + r - k} ${y} ${x + r} ${y} c f\n`;
+  };
+  // Filled dot — 4 Bézier quarter-arcs around the center (same k constant as roundedRect).
+  const dot = (cx: number, cy: number, R: number, color: RGB01) => {
+    const [rr, gg, bb] = color, k = 0.5523 * R;
+    c += `${rr} ${gg} ${bb} rg `
+      + `${cx + R} ${cy} m ${cx + R} ${cy + k} ${cx + k} ${cy + R} ${cx} ${cy + R} c `
+      + `${cx - k} ${cy + R} ${cx - R} ${cy + k} ${cx - R} ${cy} c `
+      + `${cx - R} ${cy - k} ${cx - k} ${cy - R} ${cx} ${cy - R} c `
+      + `${cx + k} ${cy - R} ${cx + R} ${cy - k} ${cx + R} ${cy} c f\n`;
+  };
   // Filled pie sector (a0/a1 in radians, CCW). Approximates the arc with Béziers.
   const sector = (cx: number, cy: number, R: number, a0: number, a1: number, color: RGB01) => {
     const [r, g, b] = color;
@@ -214,7 +208,7 @@ function pdfBuild(draw: (helpers: {
     }
     c += s + `${cx} ${cy} l f\n`;
   };
-  draw({ txt, rect, line, sector, F1, F2 });
+  draw({ txt, rect, line, sector, roundedRect, dot, F1, F2 });
   return assemblePdf(c);
 }
 
@@ -231,25 +225,45 @@ function buildMonthPDF(monthKey: string): Blob {
   ];
   const pieTotal = PIE.reduce((s, x) => s + (x.value as number), 0);
 
-  return pdfBuild(({ txt, rect, line, sector, F1, F2 }) => {
+  return pdfBuild(({ txt, rect, line, sector, roundedRect, dot, F1, F2 }) => {
     let yy = 752;
+    rect(0, 0, 595, 792, PAGE_BG);
     rect(0, 792, 595, 50, PDF.RED);
     txt(40, 814, 19, F2, PDF.WHITE, 'RESUMO DO MÊS');
     txt(40, 799, 10.5, F1, PDF.WHITE, (state.config.loja || '') + '  ·  ' + (state.config.promotora || ''));
     txt(40, yy, 10, F1, PDF.MUTED, 'MÊS');
     txt(40, yy - 17, 15, F2, PDF.INK, MONTHS[m - 1] + ' ' + y + '   ·   ' + t._dias + ' dia(s) com relatório');
-    yy -= 46;
-    const section = (title: string) => { txt(40, yy, 11, F2, PDF.RED, title.toUpperCase()); line(40, yy - 6, 555, PDF.LIGHT); yy -= 24; };
-    const row = (label: string, value: any) => { txt(48, yy, 12, F1, PDF.INK, label); txt(360, yy, 13, F2, PDF.INK, String(value)); yy -= 21; };
-    section('Meta');
-    row('Aprovados no mês', (t.aprovadas || 0) + ' / ' + (meta || 0) + (meta ? '   (' + pct + '%)' : ''));
-    yy -= 6;
+    yy -= 44;
 
-    // Proposal pie chart + legend
-    section('Propostas');
-    const cx = 115, cy = yy - 62, R = 56;
+    const sectionTitle = (title: string) => { txt(40, yy, 10.5, F2, PDF.RED, title.toUpperCase()); yy -= 18; };
+    // Rough center-alignment for bold numerals (Helvetica-Bold digits ≈ 0.62em wide) — this
+    // hand-rolled PDF has no text-measurement API, so this is an estimate, not exact.
+    const centerNum = (cx: number, y0: number, size: number, color: RGB01, str: string) => {
+      txt(cx - str.length * size * 0.31, y0, size, F2, color, str);
+    };
+
+    // META — big colored hero card with a fraction, a % pill and a progress bar.
+    const metaH = 76;
+    roundedRect(40, yy - metaH, 515, metaH, 14, PDF.BLUE);
+    txt(58, yy - 24, 9.5, F2, PDF.WHITE, 'META DO MÊS · APROVADOS');
+    txt(58, yy - 50, 24, F2, PDF.WHITE, (t.aprovadas || 0) + ' / ' + (meta || 0));
+    const pillW = 58, pillH = 24, pillX = 40 + 515 - 20 - pillW, pillY = yy - 20 - pillH;
+    roundedRect(pillX, pillY, pillW, pillH, 12, PDF.WHITE);
+    centerNum(pillX + pillW / 2, pillY + 7.5, 11.5, PDF.BLUE_DARK, pct + '%');
+    const barX = 58, barW = 515 - 36, barY = yy - metaH + 14;
+    roundedRect(barX, barY, barW, 6, 3, PDF.BLUE_DARK);
+    const fillW = meta > 0 ? Math.max(0, barW * Math.min(1, pct / 100)) : 0;
+    if (fillW > 7) roundedRect(barX, barY, fillW, 6, 3, PDF.WHITE);
+    yy -= metaH + 16;
+
+    // PROPOSTAS — donut with a hole (Bézier circle drawn over the wedges) + centered total,
+    // legend to the right. All inside a white card, like the app's panel.
+    sectionTitle('Propostas');
+    const propCardH = 136;
+    roundedRect(40, yy - propCardH, 515, propCardH, 14, CARD_BG);
+    const cx = 40 + 80, cy = yy - propCardH / 2, R = 50, holeR = 30;
     if (pieTotal <= 0) {
-      sector(cx, cy, R, 0, 2 * Math.PI - 1e-4, [0.90, 0.90, 0.92]);
+      sector(cx, cy, R, 0, 2 * Math.PI - 1e-4, PDF.LIGHT);
     } else {
       let a = Math.PI / 2; // starts at the top
       PIE.forEach(s => {
@@ -259,30 +273,56 @@ function buildMonthPDF(monthKey: string): Blob {
         a = a1;
       });
     }
-    // legenda à direita
-    let ly = yy - 26;
+    dot(cx, cy, holeR, CARD_BG);
+    centerNum(cx, cy - 5, 18, PDF.INK, String(pieTotal));
+    txt(cx - 21, cy - 19, 7, F1, PDF.MUTED, 'PROPOSTAS');
+    let ly = yy - 40;
     PIE.forEach(s => {
-      rect(220, ly - 8, 11, 11, s.color);
-      txt(238, ly, 12, F1, PDF.INK, s.label);
-      txt(430, ly, 12, F2, PDF.INK, s.value + (pieTotal ? '  (' + Math.round(((s.value as number) / pieTotal) * 100) + '%)' : ''));
-      ly -= 26;
+      dot(40 + 180, ly - 3, 4.5, s.color);
+      txt(40 + 192, ly, 11, F1, PDF.INK, s.label);
+      txt(40 + 430, ly, 11, F2, PDF.INK, s.value + (pieTotal ? '  (' + Math.round(((s.value as number) / pieTotal) * 100) + '%)' : ''));
+      ly -= 23;
     });
-    yy = cy - R - 18;
+    yy -= propCardH + 16;
 
-    section('Totais do mês');
-    ALL_FIELDS.forEach(f => row(f.label, num(t[f.key])));
-    yy -= 6;
+    // TOTAIS DO MÊS — same rounded-card grid as the daily report PDF.
+    sectionTitle('Totais do mês');
+    const COLS = 3, GAP = 6, CARD_W = (515 - GAP * (COLS - 1)) / COLS, CARD_H = 48;
+    for (let i = 0; i < ALL_FIELDS.length; i += COLS) {
+      const rowFields = ALL_FIELDS.slice(i, i + COLS);
+      rowFields.forEach((f, col) => {
+        const x = 40 + col * (CARD_W + GAP);
+        roundedRect(x, yy - CARD_H, CARD_W, CARD_H, 8, CARD_BG);
+        dot(x + 14, yy - 13, 3.7, FIELD_COLOR[f.key] || PDF.RED);
+        txt(x + 11, yy - 31, 18, F2, PDF.INK, String(num(t[f.key])));
+        txt(x + 11, yy - 43, 8, F1, PDF.MUTED, f.label.toUpperCase());
+      });
+      yy -= CARD_H + GAP;
+    }
+    yy -= 10;
+
+    // POR SEMANA — one compact line + a thin progress bar per week, relative to the month's
+    // best week (keeps each week to ~20pt so a 5-week month still fits on one page).
     if (weeks.length) {
-      section('Por semana');
+      sectionTitle('Por semana');
+      const maxAp = Math.max(1, ...weeks.map(w => w.aprovadas));
       weeks.forEach(w => {
         const d = parseISO(w.week);
-        row('Semana ' + pad(d.getDate()) + '/' + pad(d.getMonth() + 1),
-          w.aprovadas + ' aprov · ' + w.reprovadas + ' reprov · ' + w.dias + ' dia(s)');
+        const label = 'Semana ' + pad(d.getDate()) + '/' + pad(d.getMonth() + 1)
+          + '   ·   ' + w.dias + ' dia(s)   ·   ' + w.reprovadas + ' reprov.';
+        txt(40, yy, 10, F1, PDF.INK, label);
+        txt(490, yy, 11, F2, PDF.INK, w.aprovadas + ' aprov.');
+        yy -= 10;
+        roundedRect(40, yy - 5, 515, 5, 2.5, PDF.LIGHT);
+        const fw = Math.max(0, 515 * (w.aprovadas / maxAp));
+        if (fw > 5) roundedRect(40, yy - 5, fw, 5, 2.5, PDF.GREEN);
+        yy -= 15;
       });
     }
-    line(40, 54, 555, PDF.LIGHT);
+
+    line(40, 30, 555, PDF.LIGHT);
     let quando = ''; try { quando = new Date().toLocaleString('pt-BR'); } catch (e) {}
-    txt(40, 40, 9, F1, PDF.MUTED, 'Gerado em ' + quando + '  ·  App Relatório Diário');
+    txt(40, 18, 9, F1, PDF.MUTED, 'Gerado em ' + quando + '  ·  App Relatório Diário');
   });
 }
 
