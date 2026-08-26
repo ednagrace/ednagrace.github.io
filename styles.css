@@ -565,6 +565,14 @@ body.has-env-banner .appbar { padding-top: 14px; }
   border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
 }
 .chip-btn:active { background: var(--bg); }
+
+/* ---------- Dias de trabalho (Configurações) ---------- */
+.dow-row { display: flex; gap: 6px; margin-top: 4px; }
+.dow-btn {
+  flex: 1; border: 1px solid var(--line); background: #fff; color: var(--muted);
+  border-radius: 10px; padding: 10px 0; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.dow-btn.sel { background: var(--red); border-color: var(--red); color: #fff; }
 .col-list { max-height: 46vh; overflow-y: auto; margin-bottom: 12px; }
 .col-pick {
   display: flex; align-items: center; gap: 10px; padding: 11px 4px;

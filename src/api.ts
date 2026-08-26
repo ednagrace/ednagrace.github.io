@@ -142,6 +142,7 @@ export function businessSettings() {
     loja: state.config.loja,
     headerColor: state.config.headerColor || '',
     birthDate: state.config.birthDate || '',
+    diasTrabalho: state.config.diasTrabalho,
   };
 }
 // Called when the user changes a goal or a setting: stashes it as pending and tries to send it.
@@ -174,6 +175,7 @@ export async function pullSettings() {
       if (s.loja) state.config.loja = s.loja;
       if (typeof s.headerColor !== 'undefined') state.config.headerColor = s.headerColor;
       if (typeof s.birthDate !== 'undefined') state.config.birthDate = s.birthDate;
+      if (Array.isArray(s.diasTrabalho) && s.diasTrabalho.length === 7) state.config.diasTrabalho = s.diasTrabalho;
       save(LS.config, state.config);
       applyHeaderColor();   // the color may have changed on another device
       render();

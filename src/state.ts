@@ -14,6 +14,8 @@ const defaultConfig: Config = {
   metaDia:  3,                  // daily goal for approved cards (editable)
   headerColor: '',             // header color (production only); empty = brand red
   birthDate: '',               // 'YYYY-MM-DD' — promotora's date of birth
+  // [dom, seg, ter, qua, qui, sex, sáb] — default for Edna: every day except Sunday and Wednesday.
+  diasTrabalho: [false, true, true, false, true, true, true],
 };
 
 export const state: AppState = {

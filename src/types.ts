@@ -72,6 +72,9 @@ export interface Config {
   metaDia: number;
   headerColor: string;
   birthDate: string;
+  // Which weekdays count as work days (lembrete de relatório diário). Index = Date.getDay()
+  // (0 = domingo … 6 = sábado).
+  diasTrabalho: boolean[];
 }
 
 export interface ImportState {

@@ -115,8 +115,15 @@ function openSupportWhatsApp() {
   window.open('https://wa.me/' + SUPORTE_WPP + '?text=' + encodeURIComponent(txt), '_blank');
 }
 
+// Display order (Seg…Dom) paired with Date.getDay() index (0=domingo).
+const DOW_DISPLAY = [
+  { i: 1, l: 'S' }, { i: 2, l: 'T' }, { i: 3, l: 'Q' }, { i: 4, l: 'Q' },
+  { i: 5, l: 'S' }, { i: 6, l: 'S' }, { i: 0, l: 'D' },
+];
+
 function openConfig() {
   const c = state.config;
+  let dias = c.diasTrabalho.slice();
   openSheet(`
     <h2>Configurações</h2>
     ${state.session.email ? `<div class="status-line" style="margin-bottom:12px">Logado como <b>${esc(state.session.email)}</b></div>` : ''}
@@ -131,6 +138,13 @@ function openConfig() {
     <div class="field">
       <label>Meta do dia (cartões aprovados)</label>
       <input id="c-metadia" type="number" inputmode="numeric" min="0" value="${esc(c.metaDia != null ? c.metaDia : 3)}" />
+    </div>
+    <div class="field">
+      <label>📅 Dias de trabalho</label>
+      <div class="dow-row" id="c-dow">
+        ${DOW_DISPLAY.map(d => `<button type="button" class="dow-btn ${dias[d.i] ? 'sel' : ''}" data-i="${d.i}">${d.l}</button>`).join('')}
+      </div>
+      <div class="status-line">Nos dias marcados, o app lembra à noite de fazer o relatório se ainda não tiver um pra hoje.</div>
     </div>
     <div class="field">
       <label>🎂 Data de nascimento da promotora</label>
@@ -168,7 +182,7 @@ function openConfig() {
     <label class="check-row">
       <input type="checkbox" id="c-push" />
       <span>🔔 Notificações de lembrete
-        <small>Avisa neste aparelho quando um cliente vencer a data de retorno.</small></span>
+        <small>Avisa neste aparelho quando um cliente vencer a data de retorno, e à noite se ainda faltar fazer o relatório do dia.</small></span>
     </label>` : ''}
     <div class="actions">
       <button class="primary" id="c-save" style="flex:1">Salvar</button>
@@ -176,6 +190,14 @@ function openConfig() {
     <button type="button" class="pdf-btn btn-wpp" id="c-suporte" style="margin-top:16px">💬 Falar no WhatsApp (suporte)</button>
   `, () => {
     byId('c-suporte').onclick = () => openSupportWhatsApp();
+
+    document.querySelectorAll('#c-dow .dow-btn').forEach((b) => {
+      (b as HTMLElement).onclick = () => {
+        const i = Number((b as HTMLElement).getAttribute('data-i'));
+        dias[i] = !dias[i];
+        b.classList.toggle('sel', dias[i]);
+      };
+    });
 
     if (byId('c-push')) {
       const pushBox = byId('c-push') as HTMLInputElement;
@@ -234,6 +256,7 @@ function openConfig() {
       state.config.metaDia   = Math.max(0, Number(byId('c-metadia').value) || 3);
       const dob = byId('c-birth').value;   // 'YYYY-MM-DD' or ''
       state.config.birthDate = /^\d{4}-\d{2}-\d{2}$/.test(dob) ? dob : '';
+      state.config.diasTrabalho = dias.slice();
       if (!IS_STAGING) state.config.headerColor = (chosenColor === DEFAULT_HEADER) ? '' : (chosenColor as string);
       save(LS.config, state.config);
       saveSettingsRemote();          // save to Neon (shared)
