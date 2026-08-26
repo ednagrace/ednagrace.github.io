@@ -39,7 +39,7 @@ export function renderPanel() {
   const t = monthTotals(monthKey);
   const meta = metaFor(monthKey);
   const feitas = (t.aprovadas as number) || 0;   // N/A conta como 0 na barra de meta
-  const pct = meta > 0 ? Math.min(100, Math.round((feitas / meta) * 100)) : 0;
+  const pct = meta > 0 ? Math.round((feitas / meta) * 100) : 0;
   const weeks = weeklyBreakdown(monthKey);
   const maxAp = Math.max(1, ...weeks.map(w => w.aprovadas));
 
@@ -99,7 +99,7 @@ export function renderPanel() {
           <div class="big">${feitas}<small> / ${meta || '—'}</small></div>
           <div style="text-align:right;font-size:22px;font-weight:800">${meta ? pct + '%' : ''}</div>
         </div>
-        <div class="bar"><i style="width:${pct}%"></i></div>
+        <div class="bar"><i style="width:${Math.min(100, pct)}%"></i></div>
         <div class="hint">${t._dias} dia(s) com relatório no mês</div>
       </div>
 

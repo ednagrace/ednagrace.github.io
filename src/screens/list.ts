@@ -21,7 +21,7 @@ export function renderList() {
   const [y, m] = monthKey.split('-').map(Number);
   const meta = metaFor(monthKey);
   const feitas = aprovadasNoMes(monthKey);
-  const pct = meta > 0 ? Math.min(100, Math.round((feitas / meta) * 100)) : 0;
+  const pct = meta > 0 ? Math.round((feitas / meta) * 100) : 0;
   const falta = Math.max(0, meta - feitas);
 
   let rows = reportsForView().filter(r => monthKeyOf(r.data) === monthKey);
@@ -59,7 +59,7 @@ export function renderList() {
             <div style="font-size:22px;font-weight:800">${meta ? pct + '%' : ''}</div>
           </div>
         </div>
-        <div class="bar"><i style="width:${pct}%"></i></div>
+        <div class="bar"><i style="width:${Math.min(100, pct)}%"></i></div>
         <div class="hint">${meta ? (falta > 0 ? `Faltam <b>${falta}</b> para a meta` : 'Meta batida! 🎉') : 'Toque em “editar” para definir a meta do mês'}</div>
         <div class="hint meta-dia-line">🎯 Meta do dia: <b>${metaDiaVal()}</b> aprovados <button class="edit-meta" id="btn-meta-dia">editar</button></div>
       </div>

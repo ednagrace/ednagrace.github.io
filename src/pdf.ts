@@ -254,7 +254,7 @@ function buildMonthPDF(monthKey: string): Blob {
     roundedRect(barX, barY, barW, 6, 3, PDF.BLUE_DARK);
     const fillW = meta > 0 ? Math.max(0, barW * Math.min(1, pct / 100)) : 0;
     if (fillW > 7) roundedRect(barX, barY, fillW, 6, 3, PDF.WHITE);
-    yy -= metaH + 16;
+    yy -= metaH + 24;
 
     // PROPOSTAS — donut with a hole (Bézier circle drawn over the wedges) + centered total,
     // legend to the right. All inside a white card, like the app's panel.
@@ -283,7 +283,7 @@ function buildMonthPDF(monthKey: string): Blob {
       txt(40 + 430, ly, 11, F2, PDF.INK, s.value + (pieTotal ? '  (' + Math.round(((s.value as number) / pieTotal) * 100) + '%)' : ''));
       ly -= 23;
     });
-    yy -= propCardH + 16;
+    yy -= propCardH + 24;
 
     // TOTAIS DO MÊS — same rounded-card grid as the daily report PDF.
     sectionTitle('Totais do mês');
@@ -299,7 +299,7 @@ function buildMonthPDF(monthKey: string): Blob {
       });
       yy -= CARD_H + GAP;
     }
-    yy -= 10;
+    yy -= 18;
 
     // POR SEMANA — one compact line + a thin progress bar per week, relative to the month's
     // best week (keeps each week to ~20pt so a 5-week month still fits on one page).
