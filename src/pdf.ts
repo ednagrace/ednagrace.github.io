@@ -2,7 +2,7 @@ import type { Report } from './types.js';
 import { GROUPS, ALL_FIELDS, NUMERIC_KEYS, MONTHS } from './constants.js';
 import { state } from './state.js';
 import { pad, parseISO, monthKeyOf, weekday } from './dateUtils.js';
-import { fmtNA, num, numOrNull } from './format.js';
+import { num, numOrNull } from './format.js';
 import { metaFor, metaDiaVal, aprovadasNoMes, monthTotals, weeklyBreakdown } from './aggregations.js';
 import { toast } from './ui.js';
 
@@ -15,6 +15,22 @@ const PDF = {
 };
 function pdfEsc(s: any): string { return String(s).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)'); }
 function latin1(s: any): string { return String(s).replace(/[^\x00-\xFF]/g, ''); } // strip anything that isn't Latin-1 (e.g. emoji)
+
+// Accent color per field (mirrors the meaning already used elsewhere: green/red/amber for
+// the proposal outcomes). Anything not listed falls back to the brand red.
+const FIELD_COLOR: Record<string, RGB01> = {
+  aprovadas: [0.047, 0.639, 0.047],
+  reprovadas: [0.816, 0.231, 0.231],
+  analise: [0.788, 0.522, 0.000],
+  link: [0.117, 0.443, 0.831],
+  cartaoAtivacao: [0.722, 0.525, 0.043],
+  sms: [0.290, 0.333, 0.412],
+  bonus: [0.831, 0.400, 0.055],
+  odontoEfetivado: [0.043, 0.588, 0.502],
+  odontoOfertado: [0.702, 0.169, 0.169],
+};
+const CARD_BG: RGB01 = [1, 1, 1];
+const PAGE_BG: RGB01 = [0.957, 0.961, 0.969];
 
 function buildReportPDF(r: Report): Blob {
   const d = parseISO(r.data);
@@ -31,7 +47,28 @@ function buildReportPDF(r: Report): Blob {
   };
   const rect = (x: number, y: number, w: number, h: number, color: RGB01) => { const [rr, gg, bb] = color; c += `${rr} ${gg} ${bb} rg ${x} ${y} ${w} ${h} re f\n`; };
   const line = (x1: number, y: number, x2: number, color: RGB01) => { const [rr, gg, bb] = color; c += `${rr} ${gg} ${bb} RG 0.6 w ${x1} ${y} m ${x2} ${y} l S\n`; };
+  // Rounded card background — 4 straight edges + 4 Bézier corner arcs (k ≈ 0.5523 * r).
+  const roundedRect = (x: number, y: number, w: number, h: number, r: number, color: RGB01) => {
+    const [rr, gg, bb] = color, k = 0.5523 * r;
+    c += `${rr} ${gg} ${bb} rg `
+      + `${x + r} ${y} m ${x + w - r} ${y} l `
+      + `${x + w - r + k} ${y} ${x + w} ${y + r - k} ${x + w} ${y + r} c ${x + w} ${y + h - r} l `
+      + `${x + w} ${y + h - r + k} ${x + w - r + k} ${y + h} ${x + w - r} ${y + h} c ${x + r} ${y + h} l `
+      + `${x + r - k} ${y + h} ${x} ${y + h - r + k} ${x} ${y + h - r} c ${x} ${y + r} l `
+      + `${x} ${y + r - k} ${x + r - k} ${y} ${x + r} ${y} c f\n`;
+  };
+  // Filled dot — 4 Bézier quarter-arcs around the center (same k constant as roundedRect).
+  const dot = (cx: number, cy: number, R: number, color: RGB01) => {
+    const [rr, gg, bb] = color, k = 0.5523 * R;
+    c += `${rr} ${gg} ${bb} rg `
+      + `${cx + R} ${cy} m ${cx + R} ${cy + k} ${cx + k} ${cy + R} ${cx} ${cy + R} c `
+      + `${cx - k} ${cy + R} ${cx - R} ${cy + k} ${cx - R} ${cy} c `
+      + `${cx - R} ${cy - k} ${cx - k} ${cy - R} ${cx} ${cy - R} c `
+      + `${cx + k} ${cy - R} ${cx + R} ${cy - k} ${cx + R} ${cy} c f\n`;
+  };
 
+  // Page background (the white cards need something other than white to stand out against).
+  rect(0, 0, 595, 792, PAGE_BG);
   // Red header band
   rect(0, 792, 595, 50, PDF.RED);
   txt(40, 814, 19, F2, PDF.WHITE, 'RELATÓRIO DIÁRIO');
@@ -41,51 +78,75 @@ function buildReportPDF(r: Report): Blob {
   // Date
   const dataFmt = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
   txt(40, y, 10, F1, PDF.MUTED, 'DATA');
-  txt(40, y - 17, 15, F2, PDF.INK, dataFmt + '  —  ' + weekday(d));
-  y -= 46;
+  txt(40, y - 17, 15, F2, PDF.INK, dataFmt + '   ·   ' + weekday(d));
+  y -= 44;
 
-  const section = (title: string) => {
-    txt(40, y, 11, F2, PDF.RED, title.toUpperCase());
-    line(40, y - 6, 555, PDF.LIGHT);
-    y -= 24;
-  };
-  const row = (label: string, value: any) => {
-    txt(48, y, 12, F1, PDF.INK, label);
-    txt(430, y, 13, F2, PDF.INK, String(value));
-    y -= 21;
+  const sectionTitle = (title: string) => { txt(40, y, 10.5, F2, PDF.RED, title.toUpperCase()); y -= 18; };
+
+  const COLS = 3, GAP = 8, CARD_W = (515 - GAP * (COLS - 1)) / COLS, CARD_H = 54;
+  // Draws one row of up to COLS cards, advancing y past ALL rows needed for `fields`.
+  const cardsGrid = (fields: { label: string; value: any; color: RGB01 }[]) => {
+    for (let i = 0; i < fields.length; i += COLS) {
+      const rowFields = fields.slice(i, i + COLS);
+      rowFields.forEach((f, col) => {
+        const x = 40 + col * (CARD_W + GAP);
+        roundedRect(x, y - CARD_H, CARD_W, CARD_H, 8, CARD_BG);
+        dot(x + 15, y - 14, 4, f.color);
+        txt(x + 12, y - 34, 20, F2, PDF.INK, String(f.value));
+        txt(x + 12, y - 47, 8.5, F1, PDF.MUTED, f.label.toUpperCase());
+      });
+      y -= CARD_H + GAP;
+    }
   };
 
-  // Sections come from GROUPS: any new field is picked up automatically. N/A shows as "—".
+  // Sections come from GROUPS: any new field is picked up automatically. Not informed = 0
+  // (a field left blank on a single day means "didn't happen today", not "unknown").
   GROUPS.forEach(g => {
-    section(g.title);
-    g.fields.forEach(f => row(f.label, fmtNA(r[f.key])));
-    y -= 6;
+    sectionTitle(g.title);
+    cardsGrid(g.fields.map(f => ({ label: f.label, value: num(r[f.key]), color: FIELD_COLOR[f.key] || PDF.RED })));
+    y -= 8;
   });
 
-  section('Metas');
+  // Goals — same card treatment, wider (2 cols) since the values are fraction-shaped.
+  sectionTitle('Metas');
   const md = metaDiaVal();
-  row('Meta do dia (aprovados)', num(r.aprovadas) + ' / ' + md + (num(r.aprovadas) >= md ? '   (batida)' : ''));
-  row('Meta do mês (aprovados)', feitas + ' / ' + (meta || '—') + (meta ? '   (' + pct + '%)' : ''));
-  y -= 6;
+  const metaCards = [
+    { label: 'Meta do dia', value: num(r.aprovadas) + ' / ' + md + (num(r.aprovadas) >= md ? ' (bateu)' : ''), color: PDF.GREEN },
+    { label: 'Meta do mês', value: feitas + ' / ' + (meta || 0) + (meta ? ' (' + pct + '%)' : ''), color: PDF.RED },
+  ];
+  const MCOLS = 2, MGAP = 8, MCARD_W = (515 - MGAP) / MCOLS, MCARD_H = 54;
+  metaCards.forEach((f, col) => {
+    const x = 40 + col * (MCARD_W + MGAP);
+    roundedRect(x, y - MCARD_H, MCARD_W, MCARD_H, 8, CARD_BG);
+    dot(x + 15, y - 14, 4, f.color);
+    txt(x + 12, y - 34, 16, F2, PDF.INK, String(f.value));
+    txt(x + 12, y - 47, 8.5, F1, PDF.MUTED, f.label.toUpperCase());
+  });
+  y -= MCARD_H + 16;
 
-  // Notes (with simple line wrapping)
+  // Notes (with simple line wrapping), on its own light card.
   if (r.obs && String(r.obs).trim()) {
-    section('Observações');
+    sectionTitle('Observações');
     const words = String(r.obs).replace(/\s+/g, ' ').trim().split(' ');
+    const lines: string[] = [];
     let ln = '';
-    const flush = () => { if (ln) { txt(48, y, 11, F1, PDF.INK, ln); y -= 16; ln = ''; } };
     words.forEach((w: string) => {
-      if ((ln + ' ' + w).length > 85) flush();
+      if ((ln + ' ' + w).length > 85) { lines.push(ln); ln = ''; }
       ln = ln ? ln + ' ' + w : w;
     });
-    flush();
+    if (ln) lines.push(ln);
+    const boxH = lines.length * 16 + 16;
+    roundedRect(40, y - boxH, 515, boxH, 8, CARD_BG);
+    let ly = y - 20;
+    lines.forEach(l => { txt(52, ly, 11, F1, PDF.INK, l); ly -= 16; });
+    y -= boxH;
   }
 
   // Footer
-  line(40, 54, 555, PDF.LIGHT);
+  line(40, 30, 555, PDF.LIGHT);
   let quando = '';
   try { quando = new Date().toLocaleString('pt-BR'); } catch (e) {}
-  txt(40, 40, 9, F1, PDF.MUTED, 'Gerado em ' + quando + '  ·  App Relatório Diário');
+  txt(40, 18, 9, F1, PDF.MUTED, 'Gerado em ' + quando + '  ·  App Relatório Diário');
 
   return assemblePdf(c);
 }
@@ -176,12 +237,12 @@ function buildMonthPDF(monthKey: string): Blob {
     txt(40, 814, 19, F2, PDF.WHITE, 'RESUMO DO MÊS');
     txt(40, 799, 10.5, F1, PDF.WHITE, (state.config.loja || '') + '  ·  ' + (state.config.promotora || ''));
     txt(40, yy, 10, F1, PDF.MUTED, 'MÊS');
-    txt(40, yy - 17, 15, F2, PDF.INK, MONTHS[m - 1] + ' ' + y + '  —  ' + t._dias + ' dia(s) com relatório');
+    txt(40, yy - 17, 15, F2, PDF.INK, MONTHS[m - 1] + ' ' + y + '   ·   ' + t._dias + ' dia(s) com relatório');
     yy -= 46;
     const section = (title: string) => { txt(40, yy, 11, F2, PDF.RED, title.toUpperCase()); line(40, yy - 6, 555, PDF.LIGHT); yy -= 24; };
     const row = (label: string, value: any) => { txt(48, yy, 12, F1, PDF.INK, label); txt(360, yy, 13, F2, PDF.INK, String(value)); yy -= 21; };
     section('Meta');
-    row('Aprovados no mês', (t.aprovadas || 0) + ' / ' + (meta || '—') + (meta ? '   (' + pct + '%)' : ''));
+    row('Aprovados no mês', (t.aprovadas || 0) + ' / ' + (meta || 0) + (meta ? '   (' + pct + '%)' : ''));
     yy -= 6;
 
     // Proposal pie chart + legend
@@ -209,7 +270,7 @@ function buildMonthPDF(monthKey: string): Blob {
     yy = cy - R - 18;
 
     section('Totais do mês');
-    ALL_FIELDS.forEach(f => row(f.label, fmtNA(t[f.key])));
+    ALL_FIELDS.forEach(f => row(f.label, num(t[f.key])));
     yy -= 6;
     if (weeks.length) {
       section('Por semana');
