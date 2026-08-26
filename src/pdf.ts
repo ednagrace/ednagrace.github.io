@@ -181,7 +181,7 @@ function buildMonthPDF(monthKey: string): Blob {
     const section = (title: string) => { txt(40, yy, 11, F2, PDF.RED, title.toUpperCase()); line(40, yy - 6, 555, PDF.LIGHT); yy -= 24; };
     const row = (label: string, value: any) => { txt(48, yy, 12, F1, PDF.INK, label); txt(360, yy, 13, F2, PDF.INK, String(value)); yy -= 21; };
     section('Meta');
-    row('Aprovados no mês', t.aprovadas + ' / ' + (meta || '—') + (meta ? '   (' + pct + '%)' : ''));
+    row('Aprovados no mês', (t.aprovadas || 0) + ' / ' + (meta || '—') + (meta ? '   (' + pct + '%)' : ''));
     yy -= 6;
 
     // Proposal pie chart + legend

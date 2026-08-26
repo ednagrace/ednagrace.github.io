@@ -2,7 +2,7 @@ import { ALL_FIELDS, MONTHS } from '../constants.js';
 import { state } from '../state.js';
 import { app, render } from '../render.js';
 import { pad, parseISO, currentMonthKey } from '../dateUtils.js';
-import { esc, fmtNA, byId } from '../format.js';
+import { esc, fmtNA, num, byId } from '../format.js';
 import { metaFor, monthTotals, weeklyBreakdown } from '../aggregations.js';
 import { shareMonthPDF } from '../pdf.js';
 import { shiftMonth } from './list.js';
@@ -134,10 +134,10 @@ export function shareMonth(monthKey: string) {
   let txt = `📊 *Resumo do mês — ${MONTHS[m-1]} ${y}*\n`;
   txt += `🏪 ${state.config.loja} · 👤 ${state.config.promotora}\n`;
   txt += `📅 ${t._dias} dia(s) com relatório\n\n`;
-  txt += `*Propostas*\n✅ Aprovadas: ${t.aprovadas}\n❌ Reprovadas: ${t.reprovadas}\n🔍 Em análise: ${t.analise}\n\n`;
-  txt += `🔗 Links: ${t.link}\n💳 Cartão — 🔑 ${t.cartaoAtivacao} ativação\n\n`;
-  txt += `*Serviços*\n💬 SMS: ${t.sms}\n🎁 Bônus: ${t.bonus}\n🦷 Odonto Efetivado: ${t.odontoEfetivado}\n📣 Odonto Ofertado: ${t.odontoOfertado}\n`;
-  if (meta) txt += `\n🎯 Meta: ${t.aprovadas}/${meta} aprovados (${Math.round(((t.aprovadas as number) / meta) * 100)}%)\n`;
+  txt += `*Propostas*\n✅ Aprovadas: ${num(t.aprovadas)}\n❌ Reprovadas: ${num(t.reprovadas)}\n🔍 Em análise: ${num(t.analise)}\n\n`;
+  txt += `🔗 Links: ${num(t.link)}\n💳 Cartão — 🔑 ${num(t.cartaoAtivacao)} ativação\n\n`;
+  txt += `*Serviços*\n💬 SMS: ${num(t.sms)}\n🎁 Bônus: ${num(t.bonus)}\n🦷 Odonto Efetivado: ${num(t.odontoEfetivado)}\n📣 Odonto Ofertado: ${num(t.odontoOfertado)}\n`;
+  if (meta) txt += `\n🎯 Meta: ${num(t.aprovadas)}/${meta} aprovados (${Math.round((num(t.aprovadas) / meta) * 100)}%)\n`;
   if (weeks.length) {
     txt += `\n*Aprovadas por semana*\n`;
     weeks.forEach(w => { const d = parseISO(w.week); txt += `• Semana ${pad(d.getDate())}/${pad(d.getMonth() + 1)}: ${w.aprovadas}\n`; });
