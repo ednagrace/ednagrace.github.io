@@ -17,6 +17,29 @@ const PDF = {
 function pdfEsc(s: any): string { return String(s).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)'); }
 function latin1(s: any): string { return String(s).replace(/[^\x00-\xFF]/g, ''); } // strip anything that isn't Latin-1 (e.g. emoji)
 
+// Standard AFM glyph widths (per 1000 em) for Helvetica/Helvetica-Bold — only the characters
+// actually used in text we need to CENTER (digits, %, space, A-Z). Without these, centering can
+// only guess an average char width, which visibly drifts off-center (this is the alignment bug
+// that got reported). Anything not listed falls back to 556 (a digit's width, a safe average).
+const HELV_W: Record<string, number> = { ' ': 278, '%': 889,
+  '0': 556, '1': 556, '2': 556, '3': 556, '4': 556, '5': 556, '6': 556, '7': 556, '8': 556, '9': 556,
+  A: 667, B: 667, C: 722, D: 722, E: 667, F: 611, G: 778, H: 722, I: 278, J: 500, K: 667, L: 556,
+  M: 833, N: 722, O: 778, P: 667, Q: 778, R: 722, S: 667, T: 611, U: 722, V: 667, W: 944, X: 667, Y: 667, Z: 611 };
+const HELV_BOLD_W: Record<string, number> = { ' ': 278, '%': 1000,
+  '0': 556, '1': 556, '2': 556, '3': 556, '4': 556, '5': 556, '6': 556, '7': 556, '8': 556, '9': 556,
+  A: 722, B: 722, C: 722, D: 722, E: 667, F: 611, G: 778, H: 722, I: 278, J: 500, K: 722, L: 611,
+  M: 889, N: 722, O: 778, P: 667, Q: 778, R: 722, S: 667, T: 611, U: 722, V: 667, W: 944, X: 667, Y: 667, Z: 611 };
+function textWidth(s: string, font: string, size: number): number {
+  const table = font === 'F2' ? HELV_BOLD_W : HELV_W;
+  let w = 0;
+  for (const ch of String(s).toUpperCase()) w += table[ch] ?? 556;
+  return (w / 1000) * size;
+}
+// Lightens a color toward white — used for the pastel badge behind each field icon.
+function tint(c: RGB01, amt = 0.82): RGB01 {
+  return [c[0] + (1 - c[0]) * amt, c[1] + (1 - c[1]) * amt, c[2] + (1 - c[2]) * amt];
+}
+
 // Accent color per field (mirrors the meaning already used elsewhere: green/red/amber for
 // the proposal outcomes). Anything not listed falls back to the brand red.
 const FIELD_COLOR: Record<string, RGB01> = {
@@ -94,10 +117,12 @@ function buildReportPDF(r: Report): Blob {
       const rowFields = fields.slice(i, i + COLS);
       rowFields.forEach((f, col) => {
         const x = 40 + col * (CARD_W + GAP);
+        const fc = FIELD_COLOR[f.key] || PDF.RED;
         roundedRect(x, y - CARD_H, CARD_W, CARD_H, 8, CARD_BG);
-        image(f.key, x + 10, y - 26, 16, 16);
-        txt(x + 12, y - 38, 20, F2, PDF.INK, String(f.value));
-        txt(x + 12, y - 47, 8.5, F1, PDF.MUTED, f.label.toUpperCase());
+        roundedRect(x + 10, y - 32, 22, 22, 6, tint(fc));
+        image(f.key, x + 14, y - 28, 14, 14);
+        txt(x + 40, y - 28, 19, F2, PDF.INK, String(f.value));
+        txt(x + 10, y - 44, 8.5, F1, fc, f.label.toUpperCase());
       });
       y -= CARD_H + GAP;
     }
@@ -210,6 +235,7 @@ function pdfBuild(draw: (helpers: {
   roundedRect: (x: number, y: number, w: number, h: number, r: number, color: RGB01) => void;
   dot: (cx: number, cy: number, R: number, color: RGB01) => void;
   image: (key: IconKey, x: number, y: number, w: number, h: number) => void;
+  centerText: (cx: number, y: number, size: number, font: string, color: RGB01, s: any) => void;
   F1: string; F2: string;
 }) => void): Blob {
   let c = '';
@@ -259,7 +285,12 @@ function pdfBuild(draw: (helpers: {
   const image = (key: IconKey, x: number, y: number, w: number, h: number) => {
     c += `q ${w} 0 0 ${h} ${x} ${y} cm /Ic_${key} Do Q\n`;
   };
-  draw({ txt, rect, line, sector, roundedRect, dot, image, F1, F2 });
+  // Horizontally centers `s` on `cx` using real glyph widths (see textWidth) — plain
+  // char-count guessing is what caused the donut/label centering to visibly drift off-center.
+  const centerText = (cx: number, y: number, size: number, font: string, color: RGB01, s: any) => {
+    txt(cx - textWidth(String(s), font, size) / 2, y, size, font, color, s);
+  };
+  draw({ txt, rect, line, sector, roundedRect, dot, image, centerText, F1, F2 });
   return assemblePdf(c);
 }
 
@@ -276,7 +307,7 @@ function buildMonthPDF(monthKey: string): Blob {
   ];
   const pieTotal = PIE.reduce((s, x) => s + (x.value as number), 0);
 
-  return pdfBuild(({ txt, rect, line, sector, roundedRect, dot, image, F1, F2 }) => {
+  return pdfBuild(({ txt, rect, line, sector, roundedRect, dot, image, centerText, F1, F2 }) => {
     let yy = 752;
     rect(0, 0, 595, 792, PAGE_BG);
     rect(0, 792, 595, 50, PDF.RED);
@@ -287,11 +318,6 @@ function buildMonthPDF(monthKey: string): Blob {
     yy -= 44;
 
     const sectionTitle = (title: string) => { txt(40, yy, 10.5, F2, PDF.RED, title.toUpperCase()); yy -= 18; };
-    // Rough center-alignment for bold numerals (Helvetica-Bold digits ≈ 0.62em wide) — this
-    // hand-rolled PDF has no text-measurement API, so this is an estimate, not exact.
-    const centerNum = (cx: number, y0: number, size: number, color: RGB01, str: string) => {
-      txt(cx - str.length * size * 0.31, y0, size, F2, color, str);
-    };
 
     // META — big colored hero card with a fraction, a % pill and a progress bar.
     const metaH = 76;
@@ -300,7 +326,7 @@ function buildMonthPDF(monthKey: string): Blob {
     txt(58, yy - 50, 24, F2, PDF.WHITE, (t.aprovadas || 0) + ' / ' + (meta || 0));
     const pillW = 58, pillH = 24, pillX = 40 + 515 - 20 - pillW, pillY = yy - 20 - pillH;
     roundedRect(pillX, pillY, pillW, pillH, 12, PDF.WHITE);
-    centerNum(pillX + pillW / 2, pillY + 7.5, 11.5, PDF.BLUE_DARK, pct + '%');
+    centerText(pillX + pillW / 2, pillY + 7.5, 11.5, F2, PDF.BLUE_DARK, pct + '%');
     const barX = 58, barW = 515 - 36, barY = yy - metaH + 14;
     roundedRect(barX, barY, barW, 6, 3, PDF.BLUE_DARK);
     const fillW = meta > 0 ? Math.max(0, barW * Math.min(1, pct / 100)) : 0;
@@ -325,28 +351,31 @@ function buildMonthPDF(monthKey: string): Blob {
       });
     }
     dot(cx, cy, holeR, CARD_BG);
-    centerNum(cx, cy - 5, 18, PDF.INK, String(pieTotal));
-    txt(cx - 21, cy - 19, 7, F1, PDF.MUTED, 'PROPOSTAS');
+    centerText(cx, cy - 5, 18, F2, PDF.INK, String(pieTotal));
+    centerText(cx, cy - 19, 7, F1, PDF.MUTED, 'PROPOSTAS');
     let ly = yy - 40;
     PIE.forEach(s => {
-      dot(40 + 180, ly - 3, 4.5, s.color);
+      dot(40 + 180, ly + 3.5, 4.5, s.color);
       txt(40 + 192, ly, 11, F1, PDF.INK, s.label);
       txt(40 + 430, ly, 11, F2, PDF.INK, s.value + (pieTotal ? '  (' + Math.round(((s.value as number) / pieTotal) * 100) + '%)' : ''));
       ly -= 23;
     });
     yy -= propCardH + 24;
 
-    // TOTAIS DO MÊS — same rounded-card grid as the daily report PDF.
+    // TOTAIS DO MÊS — same rounded-card grid as the daily report PDF: icon on a pastel badge
+    // of its own color, the number beside it (not stacked), label below in that same color.
     sectionTitle('Totais do mês');
     const COLS = 3, GAP = 6, CARD_W = (515 - GAP * (COLS - 1)) / COLS, CARD_H = 52;
     for (let i = 0; i < ALL_FIELDS.length; i += COLS) {
       const rowFields = ALL_FIELDS.slice(i, i + COLS);
       rowFields.forEach((f, col) => {
         const x = 40 + col * (CARD_W + GAP);
+        const fc = FIELD_COLOR[f.key] || PDF.RED;
         roundedRect(x, yy - CARD_H, CARD_W, CARD_H, 8, CARD_BG);
-        image(f.key as IconKey, x + 9, yy - 22, 14, 14);
-        txt(x + 11, yy - 34, 17, F2, PDF.INK, String(num(t[f.key])));
-        txt(x + 11, yy - 45, 8, F1, PDF.MUTED, f.label.toUpperCase());
+        roundedRect(x + 10, yy - 32, 22, 22, 6, tint(fc));
+        image(f.key as IconKey, x + 14, yy - 28, 14, 14);
+        txt(x + 40, yy - 28, 19, F2, PDF.INK, String(num(t[f.key])));
+        txt(x + 10, yy - 42, 8, F1, fc, f.label.toUpperCase());
       });
       yy -= CARD_H + GAP;
     }
