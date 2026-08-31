@@ -53,13 +53,15 @@ export interface Customer {
   ultimoEvento?: CustomerEvent | null;
 }
 
+// 'outro' = mensagem escrita para pessoas LGBTQIA+ (valor explícito, escolhido pela usuária).
+// null / ausente = gênero não definido (a usuária não marcou nada).
+// São estados distintos; só o filtro "Outro" junta os dois (em grupos separados).
 export type TemplateGender = 'feminino' | 'masculino' | 'outro';
 
 export interface Template {
   id?: string | number;
   title: string;
   body: string;
-  // null / ausente = "sem gênero" — valor distinto de 'outro', mas o filtro "Outro" mostra os dois.
   gender?: TemplateGender | null;
 }
 
@@ -142,6 +144,8 @@ export interface AppState {
   // Padrão: só mostra quem "parece WhatsApp" (looksLikeWhatsApp) — existem customers sem
   // telefone, ou com telefone fixo, que nunca receberiam mensagem por esta tela.
   customersWhatsappOnly: boolean;
+  // Filtro de gênero na lista de Clientes ('' = todos). Só de tela, não persiste.
+  customersGender: '' | 'masculino' | 'feminino' | 'outro';
 }
 
 export interface WeekTotal {

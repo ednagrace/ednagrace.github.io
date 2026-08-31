@@ -156,7 +156,7 @@ function openConfig() {
       <div class="dow-row" id="c-dow">
         ${DOW_DISPLAY.map(d => `<button type="button" class="dow-btn ${dias[d.i] ? 'sel' : ''}" data-i="${d.i}">${d.l}</button>`).join('')}
       </div>
-      <div class="status-line">Nos dias marcados, o app lembra à noite de fazer o relatório se ainda não tiver um pra hoje.</div>
+      <div class="status-line">Nos dias marcados, o app lembra à noite de fazer o relatório se ainda não houver um para hoje.</div>
     </div>
     <div class="field">
       <label>🎂 Data de nascimento da promotora</label>

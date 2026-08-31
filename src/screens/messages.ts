@@ -16,12 +16,20 @@ import { openCustomers } from './customers.js';
 export function openMsg() {
   pullTemplates().then(() => { if (state.view === 'msg') { selectFirstTemplate(); render(); } });
   pullCustomers().then(() => { if (state.view === 'msg') render(); });
-  selectFirstTemplate();
   state.msgDestMode = 'pessoa';   // sempre volta pro modo padrão ao reabrir a tela
-  state.msgGender = '';           // idem: filtro de gênero começa desligado
+  syncMsgGenderFromCustomer();    // filtro já vem no gênero do cliente; também escolhe o 1º template
   state.view = 'msg';
   render();
   window.scrollTo(0, 0);
+}
+
+// Automação do óbvio: ao escolher um cliente, o filtro de template já aparece no gênero
+// dele (mulher → templates de mulher). A usuária pode trocar depois; só é re-sincronizado
+// quando o cliente muda de novo. Chamada nos pontos onde state.customerId muda.
+export function syncMsgGenderFromCustomer() {
+  const g = currentCustomer()?.gender;
+  state.msgGender = g === 'feminino' ? 'f' : g === 'masculino' ? 'm' : g === 'outro' ? 'o' : '';
+  state.msg = toMsg(filteredTemplates()[0]);
 }
 const EMPTY_MSG: MsgState = { id: null, title: '', body: '', gender: null };
 function toMsg(t?: Template | null): MsgState {
@@ -34,9 +42,10 @@ function selectFirstTemplate() {
 }
 
 /* ---------------- Filtro do seletor de templates por gênero ----------------
-   `gender` é atributo do template no Neon: 'feminino' | 'masculino' | 'outro' | NULL.
-   NULL ("sem gênero") e 'outro' são valores distintos, mas o filtro "Outro" mostra os dois.
-   Nenhum botão aceso = mostra todos. */
+   `gender` no Neon: 'feminino' | 'masculino' | 'outro' (mensagem escrita para pessoas
+   LGBTQIA+) | NULL (gênero não definido). São 4 estados distintos.
+   Filtro: "Homem"/"Mulher" mostram só o valor exato; "Outro" mostra 'outro' E NULL,
+   em dois grupos (LGBTQIA+, depois "gênero não definido"). Nenhum botão = todos. */
 type GenderKey = 'f' | 'm' | 'o';
 const GENDER_BUTTONS: { key: GenderKey; label: string; gender: TemplateGender }[] = [
   { key: 'm', label: '♂️ Homem', gender: 'masculino' },
@@ -51,8 +60,10 @@ function matchesGenderFilter(t: Template): boolean {
   if (state.msgGender === 'o') return t.gender === 'outro' || t.gender == null;
   return genderKey(t.gender) === state.msgGender;
 }
+const byTitle = (a: Template, b: Template) =>
+  (a.title || '').localeCompare(b.title || '', 'pt', { sensitivity: 'base' });
 function filteredTemplates(): Template[] {
-  return state.templates.filter(matchesGenderFilter);
+  return state.templates.filter(matchesGenderFilter).sort(byTitle);
 }
 function applyGenderFilter(g: GenderKey) {
   state.msgGender = state.msgGender === g ? '' : g;
@@ -142,10 +153,20 @@ export function renderMsg() {
     </div>`;
 
   const tpls = filteredTemplates();
-  const options = ['<option value="">— Novo template —</option>']
-    .concat(tpls.map(t =>
-      `<option value="${t.id}" ${String(t.id) === String(cur.id) ? 'selected' : ''}>${esc(t.title)}</option>`))
-    .join('');
+  const optEl = (t: Template) =>
+    `<option value="${t.id}"${String(t.id) === String(cur.id) ? ' selected' : ''}>${esc(t.title)}</option>`;
+  const novoOpt = '<option value="">— Novo template —</option>';
+  let options: string;
+  if (state.msgGender === 'o') {
+    // Filtro "Outro": LGBTQIA+ primeiro, depois os de gênero não definido.
+    const lgbt = tpls.filter(t => t.gender === 'outro');
+    const semGenero = tpls.filter(t => t.gender == null);
+    options = novoOpt
+      + (lgbt.length ? `<optgroup label="LGBTQIA+">${lgbt.map(optEl).join('')}</optgroup>` : '')
+      + (semGenero.length ? `<optgroup label="Gênero não definido">${semGenero.map(optEl).join('')}</optgroup>` : '');
+  } else {
+    options = novoOpt + tpls.map(optEl).join('');
+  }
   const genderFilter = `
     <div class="seg-control gender-filter">
       ${GENDER_BUTTONS.map(b =>
@@ -182,7 +203,7 @@ export function renderMsg() {
           ${GENDER_BUTTONS.map(b =>
             `<button type="button" class="seg-btn${genderKey(cur.gender) === b.key ? ' sel' : ''}" data-tg="${b.gender}">${b.label}</button>`).join('')}
         </div>
-        <div class="hint-inline">Sem marcar = sem gênero (aparece no filtro "Outro").</div>
+        <div class="hint-inline">Sem marcar = gênero não definido.</div>
         <div class="hint-inline hint-incl">${GENERO_OUTRO_NOTA}</div>
       </div>
       <div class="field">
@@ -205,10 +226,11 @@ export function renderMsg() {
     (btn as HTMLElement).onclick = () => applyGenderFilter((btn as HTMLElement).getAttribute('data-gf') as GenderKey);
   });
   if (mode === 'pessoa') {
+    const afterContactChange = () => { syncMsgGenderFromCustomer(); render(); };
     byId('ct-open-picker').onclick = () => openCustomers(true);
-    byId('ct-novo').onclick = () => openContactSheet(null);
-    if (byId('ct-limpar')) byId('ct-limpar').onclick = () => { state.customerId = null; render(); };
-    if (byId('ct-edit')) byId('ct-edit').onclick = () => openContactSheet(currentCustomer());
+    byId('ct-novo').onclick = () => openContactSheet(null, afterContactChange);
+    if (byId('ct-limpar')) byId('ct-limpar').onclick = () => { state.customerId = null; afterContactChange(); };
+    if (byId('ct-edit')) byId('ct-edit').onclick = () => openContactSheet(currentCustomer(), afterContactChange);
     if (byId('ct-agenda')) byId('ct-agenda').onclick = pickFromDeviceContacts;
   }
   byId('tpl-sel').onchange = (e: Event) => {
@@ -219,7 +241,7 @@ export function renderMsg() {
   document.querySelectorAll('#tpl-gender [data-tg]').forEach(btn => {
     (btn as HTMLElement).onclick = () => {
       const g = (btn as HTMLElement).getAttribute('data-tg') as TemplateGender;
-      state.msg.gender = state.msg.gender === g ? null : g;   // tocar de novo no aceso = sem gênero
+      state.msg.gender = state.msg.gender === g ? null : g;   // tocar de novo no aceso = gênero não definido
       render();
     };
   });
@@ -415,13 +437,16 @@ function renderListaMenu() {
 // Helper compartilhado pelas 3 telas de escolher-quem (categoria fixa, lista customizada,
 // criar/editar lista): rola só a lista de nomes — o botão de confirmar fica fixo no rodapé,
 // sempre visível (não precisa rolar até o fim pra achar).
+const byCustomerLabel = (a: Customer, b: Customer) =>
+  customerLabel(a).localeCompare(customerLabel(b), 'pt', { sensitivity: 'base' });
 function renderCheckboxPicker(
   titulo: string,
-  candidatos: Customer[],
+  candidatosRaw: Customer[],
   preSelecionados: Set<string>,
   labelConfirmar: (n: number) => string,
   onConfirmar: (escolhidos: Customer[]) => void,
 ) {
+  const candidatos = [...candidatosRaw].sort(byCustomerLabel);
   const selecionados = new Set(preSelecionados);
   const rowsHTML = candidatos.map((c) => `
     <label class="check-row" data-ctid="${c.id}">

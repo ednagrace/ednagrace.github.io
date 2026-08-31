@@ -41,6 +41,7 @@ export const state: AppState = {
   customersPickMode: false,
   customersSearch: '',
   customersWhatsappOnly: true,
+  customersGender: '',
 };
 
 export function sessionValid(): boolean {

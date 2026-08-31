@@ -7,6 +7,7 @@ import { isOnline, pullCustomers, getCustomerDetalhe, addCustomerEvent } from '.
 import { customerLabel, customerInfoLine, eventLabel, looksLikeWhatsApp, TIPOS_NOVA_NOTA } from '../customers.js';
 import { openSheet, closeSheet, toast } from '../ui.js';
 import { openContactSheet } from '../components/contatoSheet.js';
+import { syncMsgGenderFromCustomer } from './messages.js';
 
 /* ---------------- SCREEN: CLIENTES (cadastro unificado) ----------------
    Entidade única: funde a antiga agenda de Contatos com o antigo cadastro de Clientes — existem
@@ -21,6 +22,7 @@ import { openContactSheet } from '../components/contatoSheet.js';
 export function openCustomers(pickMode?: boolean) {
   state.customersPickMode = !!pickMode;
   state.customersSearch = '';
+  state.customersGender = '';
   state.view = 'customers';
   render();
   window.scrollTo(0, 0);
@@ -42,6 +44,10 @@ export function renderCustomers() {
         <input type="checkbox" id="cu-wa-only" ${state.customersWhatsappOnly ? 'checked' : ''} />
         <span>📱 Só quem parece ter WhatsApp</span>
       </label>
+      <div class="seg-control gender-filter" id="cu-gender" style="margin-bottom:12px">
+        ${([['masculino', '♂️ Homem'], ['feminino', '♀️ Mulher'], ['outro', '⚧️ Outro']] as const)
+          .map(([g, l]) => `<button type="button" class="seg-btn${state.customersGender === g ? ' sel' : ''}" data-g="${g}">${l}</button>`).join('')}
+      </div>
       <div class="list" id="cu-list">${customerRowsHTML()}</div>
     </div>
     <button class="fab" id="fab-novo-cliente"><span class="plus">＋</span> Novo cliente</button>
@@ -54,6 +60,15 @@ export function renderCustomers() {
     state.customersWhatsappOnly = (e.target as HTMLInputElement).checked;
     renderCustomersSoft();
   };
+  document.querySelectorAll('#cu-gender .seg-btn').forEach((b) => {
+    (b as HTMLElement).onclick = () => {
+      const g = (b as HTMLElement).getAttribute('data-g') as typeof state.customersGender;
+      state.customersGender = state.customersGender === g ? '' : g;
+      document.querySelectorAll('#cu-gender .seg-btn').forEach((x) => x.classList.remove('sel'));
+      if (state.customersGender) b.classList.add('sel');
+      renderCustomersSoft();
+    };
+  });
   wireCustomerRows();
 }
 
@@ -62,13 +77,14 @@ function filteredCustomers(): Customer[] {
   const digits = q.replace(/\D/g, '');
   return state.customers.filter((c) => {
     if (state.customersWhatsappOnly && !looksLikeWhatsApp(c.phone)) return false;
+    if (state.customersGender && String(c.gender || '') !== state.customersGender) return false;
     if (!q) return true;
     const name = (c.name || '').toLowerCase();
     const email = (c.email || '').toLowerCase();
     const seq = (c.sequencia || '').toLowerCase();
     const phone = (c.phone || '').replace(/\D/g, '');
     return name.includes(q) || email.includes(q) || seq.includes(q) || (digits.length >= 3 && phone.includes(digits));
-  });
+  }).sort((a, b) => customerLabel(a).localeCompare(customerLabel(b), 'pt', { sensitivity: 'base' }));
 }
 
 function initials(c: Customer): string {
@@ -107,6 +123,7 @@ function wireCustomerRows() {
       if (!c) return;
       if (state.customersPickMode) {
         state.customerId = c.id ?? null;
+        syncMsgGenderFromCustomer();   // filtro de template já vem no gênero do cliente escolhido
         state.view = 'msg';
         render();
       } else {
