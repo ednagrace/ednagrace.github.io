@@ -59,7 +59,8 @@ export interface Template {
   id?: string | number;
   title: string;
   body: string;
-  gender?: TemplateGender;
+  // null / ausente = "sem gênero" — valor distinto de 'outro', mas o filtro "Outro" mostra os dois.
+  gender?: TemplateGender | null;
 }
 
 // Lista customizada de clientes pra envio de template em massa (Mensagens → Lista). Diferente
@@ -104,7 +105,7 @@ export interface MsgState {
   id: string | number | null;
   title: string;
   body: string;
-  gender: TemplateGender;
+  gender: TemplateGender | null;
 }
 
 export type ViewName = 'list' | 'form' | 'panel' | 'msg' | 'import' | 'customers';

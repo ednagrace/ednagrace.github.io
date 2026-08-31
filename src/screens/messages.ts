@@ -23,10 +23,10 @@ export function openMsg() {
   render();
   window.scrollTo(0, 0);
 }
-const EMPTY_MSG: MsgState = { id: null, title: '', body: '', gender: 'outro' };
+const EMPTY_MSG: MsgState = { id: null, title: '', body: '', gender: null };
 function toMsg(t?: Template | null): MsgState {
   return t
-    ? { id: t.id ?? null, title: t.title, body: t.body, gender: t.gender || 'outro' }
+    ? { id: t.id ?? null, title: t.title, body: t.body, gender: t.gender ?? null }
     : { ...EMPTY_MSG };
 }
 function selectFirstTemplate() {
@@ -34,20 +34,25 @@ function selectFirstTemplate() {
 }
 
 /* ---------------- Filtro do seletor de templates por gênero ----------------
-   O gênero é um atributo do template (templates.gender no Neon): 'feminino' | 'masculino'
-   | 'outro'. Os 3 botões filtram o seletor por esse atributo; nenhum aceso = mostra todos. */
+   `gender` é atributo do template no Neon: 'feminino' | 'masculino' | 'outro' | NULL.
+   NULL ("sem gênero") e 'outro' são valores distintos, mas o filtro "Outro" mostra os dois.
+   Nenhum botão aceso = mostra todos. */
 type GenderKey = 'f' | 'm' | 'o';
 const GENDER_BUTTONS: { key: GenderKey; label: string; gender: TemplateGender }[] = [
   { key: 'm', label: '♂️ Homem', gender: 'masculino' },
   { key: 'f', label: '♀️ Mulher', gender: 'feminino' },
   { key: 'o', label: '⚧️ Outro', gender: 'outro' },
 ];
-function genderKey(g: TemplateGender | undefined): GenderKey {
-  return g === 'feminino' ? 'f' : g === 'masculino' ? 'm' : 'o';
+function genderKey(g: TemplateGender | null | undefined): GenderKey | null {
+  return g === 'feminino' ? 'f' : g === 'masculino' ? 'm' : g === 'outro' ? 'o' : null;
+}
+function matchesGenderFilter(t: Template): boolean {
+  if (!state.msgGender) return true;
+  if (state.msgGender === 'o') return t.gender === 'outro' || t.gender == null;
+  return genderKey(t.gender) === state.msgGender;
 }
 function filteredTemplates(): Template[] {
-  if (!state.msgGender) return state.templates;
-  return state.templates.filter(t => genderKey(t.gender) === state.msgGender);
+  return state.templates.filter(matchesGenderFilter);
 }
 function applyGenderFilter(g: GenderKey) {
   state.msgGender = state.msgGender === g ? '' : g;
@@ -177,6 +182,7 @@ export function renderMsg() {
           ${GENDER_BUTTONS.map(b =>
             `<button type="button" class="seg-btn${genderKey(cur.gender) === b.key ? ' sel' : ''}" data-tg="${b.gender}">${b.label}</button>`).join('')}
         </div>
+        <div class="hint-inline">Sem marcar = sem gênero (aparece no filtro "Outro").</div>
       </div>
       <div class="field">
         <label>Mensagem</label>
@@ -211,7 +217,8 @@ export function renderMsg() {
   };
   document.querySelectorAll('#tpl-gender [data-tg]').forEach(btn => {
     (btn as HTMLElement).onclick = () => {
-      state.msg.gender = (btn as HTMLElement).getAttribute('data-tg') as TemplateGender;
+      const g = (btn as HTMLElement).getAttribute('data-tg') as TemplateGender;
+      state.msg.gender = state.msg.gender === g ? null : g;   // tocar de novo no aceso = sem gênero
       render();
     };
   });
