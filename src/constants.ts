@@ -59,6 +59,13 @@ export const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.ap
 export const APP_VERSION = 'v68'; // bump together with sw.js's CACHE on every release
 export const ADMIN_EMAIL = 'jpantunesdesouza@gmail.com';
 
+// Inclusion copy — shown wherever gender shows up, and in the app footer / login.
+// The product is for everyone; "Outro" should read as welcoming, not as an afterthought.
+export const GENERO_OUTRO_NOTA =
+  '"Outro" contempla pessoas não-binárias e toda a comunidade LGBTQIA+ — aqui cada pessoa é tratada com respeito.';
+export const INCLUSAO_NOTA =
+  'Feito para todas as pessoas, sem distinção de gênero, orientação sexual ou identidade. 🏳️‍🌈';
+
 export const DEFAULT_META = 22; // default monthly goal for approved proposals (editable)
 export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 export const SUPORTE_WPP = '5519999974213'; // 55 (BR) + 19 99997-4213

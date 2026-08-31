@@ -5,6 +5,7 @@ import { openSheet, closeSheet, toast } from '../ui.js';
 import { render } from '../render.js';
 import { esc, byId } from '../format.js';
 import { customerLabel, contactPickerAvailable, saveToDeviceContacts } from '../customers.js';
+import { GENERO_OUTRO_NOTA } from '../constants.js';
 
 /* ---------- Customer: pick from device address book + create/edit form ----------
    Sem seção de vínculo (era contato <-> cliente, duas entidades separadas) — agora é um
@@ -54,6 +55,7 @@ export function openContactSheet(c: Customer | null, onSaved?: (c: Customer) => 
           .map(([g, l]) => `<button type="button" class="seg-btn${gender === g ? ' sel' : ''}" data-g="${g}">${l}</button>`).join('')}
       </div>
       <div class="status-line">Sem marcar = não informar. Define a concordância nas mensagens (atalho <code>{oae}</code>: querido / querida / queride).</div>
+      <div class="status-line hint-incl">${GENERO_OUTRO_NOTA}</div>
     </div>
     <div class="field">
       <label>Sequência (opcional)</label>

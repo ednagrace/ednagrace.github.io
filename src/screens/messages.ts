@@ -5,7 +5,7 @@ import { pad } from '../dateUtils.js';
 import { esc, byId } from '../format.js';
 import { isOnline, pullCustomers, pullTemplates, authHeaders, saveSettingsRemote } from '../api.js';
 import { apiUrl, LS } from '../env.js';
-import { CARTAO_QUICK_BODY } from '../constants.js';
+import { CARTAO_QUICK_BODY, GENERO_OUTRO_NOTA } from '../constants.js';
 import { refreshSession } from '../auth.js';
 import { toast, openSheet, closeSheet } from '../ui.js';
 import { currentCustomer, customerLabel, phoneDigits, contactPickerAvailable } from '../customers.js';
@@ -183,6 +183,7 @@ export function renderMsg() {
             `<button type="button" class="seg-btn${genderKey(cur.gender) === b.key ? ' sel' : ''}" data-tg="${b.gender}">${b.label}</button>`).join('')}
         </div>
         <div class="hint-inline">Sem marcar = sem gênero (aparece no filtro "Outro").</div>
+        <div class="hint-inline hint-incl">${GENERO_OUTRO_NOTA}</div>
       </div>
       <div class="field">
         <label>Mensagem</label>
