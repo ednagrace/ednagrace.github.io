@@ -1,3 +1,4 @@
+import type { TemplateGender } from '../types.js';
 import { MONTHS, APP_VERSION, SUPORTE_WPP } from '../constants.js';
 import { ENVS, ALL_FIELDS } from '../constants.js';
 import { ENV, IS_STAGING, API_BASE, apiUrl } from '../env.js';
@@ -124,12 +125,21 @@ const DOW_DISPLAY = [
 function openConfig() {
   const c = state.config;
   let dias = c.diasTrabalho.slice();
+  let promGender: TemplateGender = c.promotoraGender || 'feminino';
   openSheet(`
     <h2>Configurações</h2>
     ${state.session.email ? `<div class="status-line" style="margin-bottom:12px">Logado como <b>${esc(state.session.email)}</b></div>` : ''}
     <div class="field">
       <label>Promotora</label>
       <input id="c-prom" type="text" value="${esc(c.promotora)}" />
+    </div>
+    <div class="field">
+      <label>Gênero da promotora</label>
+      <div class="seg-control gender-filter" id="c-prom-gender">
+        ${([['masculino', '♂️ Homem'], ['feminino', '♀️ Mulher'], ['outro', '⚧️ Outro']] as const)
+          .map(([g, l]) => `<button type="button" class="seg-btn${promGender === g ? ' sel' : ''}" data-g="${g}">${l}</button>`).join('')}
+      </div>
+      <div class="status-line">Define a palavra "promotora / promotor / promotore" nos textos de mensagem (atalho <code>{cargo}</code>).</div>
     </div>
     <div class="field">
       <label>Loja</label>
@@ -199,6 +209,14 @@ function openConfig() {
       };
     });
 
+    document.querySelectorAll('#c-prom-gender .seg-btn').forEach((b) => {
+      (b as HTMLElement).onclick = () => {
+        promGender = (b as HTMLElement).getAttribute('data-g') as TemplateGender;
+        document.querySelectorAll('#c-prom-gender .seg-btn').forEach((x) => x.classList.remove('sel'));
+        b.classList.add('sel');
+      };
+    });
+
     if (byId('c-push')) {
       const pushBox = byId('c-push') as HTMLInputElement;
       currentPushSubscription().then((sub) => { pushBox.checked = !!sub; });
@@ -252,6 +270,7 @@ function openConfig() {
 
     byId('c-save').onclick = () => {
       state.config.promotora = byId('c-prom').value.trim() || 'Edna Grace';
+      state.config.promotoraGender = promGender;
       state.config.loja      = byId('c-loja').value.trim() || 'Savegnago';
       state.config.metaDia   = Math.max(0, Number(byId('c-metadia').value) || 3);
       const dob = byId('c-birth').value;   // 'YYYY-MM-DD' or ''

@@ -10,6 +10,7 @@ export function save(key: string, val: any) { localStorage.setItem(key, JSON.str
 
 const defaultConfig: Config = {
   promotora: 'Edna Grace',
+  promotoraGender: 'feminino',  // Edna; muda em Configurações
   loja:     'Savegnago',
   metaDia:  3,                  // daily goal for approved cards (editable)
   headerColor: '',             // header color (production only); empty = brand red
@@ -27,7 +28,7 @@ export const state: AppState = {
   templates: load(LS.templates, []),    // [{ id, title, body }]
   customers: load(LS.customers, []),    // cadastro unificado (Clientes screen + agenda WhatsApp)
   customLists: load(LS.customLists, []), // listas customizadas de envio (tela de Mensagens)
-  msg:     { id: null, title: '', body: '' },
+  msg:     { id: null, title: '', body: '', gender: 'outro' },
   msgDestMode: 'pessoa',                // tela de Mensagens: 'pessoa' ou 'lista' — não persiste
   msgGender: '',                        // tela de Mensagens: filtro de templates por gênero — não persiste
   customerId: null,                     // customer selected on the Messages screen

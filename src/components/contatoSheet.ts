@@ -31,6 +31,7 @@ export async function pickFromDeviceContacts() {
 export function openContactSheet(c: Customer | null, onSaved?: (c: Customer) => void) {
   const cur: Customer = c || { id: undefined, name: '', phone: '', email: '', gender: '' };
   const isNew = !cur.id;
+  let gender = String(cur.gender || '');   // '' = não informar; muda pelos botões abaixo
 
   openSheet(`
     <h2>${isNew ? 'Novo cliente' : 'Editar cliente'}</h2>
@@ -48,12 +49,11 @@ export function openContactSheet(c: Customer | null, onSaved?: (c: Customer) => 
     </div>
     <div class="field">
       <label>Gênero (opcional)</label>
-      <select id="ct-gender">
-        <option value="" ${!cur.gender ? 'selected' : ''}>— Não informar —</option>
-        <option value="feminino" ${cur.gender === 'feminino' ? 'selected' : ''}>Feminino</option>
-        <option value="masculino" ${cur.gender === 'masculino' ? 'selected' : ''}>Masculino</option>
-        <option value="outro" ${cur.gender === 'outro' ? 'selected' : ''}>Outro</option>
-      </select>
+      <div class="seg-control gender-filter" id="ct-gender">
+        ${([['masculino', '♂️ Homem'], ['feminino', '♀️ Mulher'], ['outro', '⚧️ Outro']] as const)
+          .map(([g, l]) => `<button type="button" class="seg-btn${gender === g ? ' sel' : ''}" data-g="${g}">${l}</button>`).join('')}
+      </div>
+      <div class="status-line">Sem marcar = não informar. Define a concordância nas mensagens (atalho <code>{oae}</code>: querido / querida / queride).</div>
     </div>
     <div class="field">
       <label>Sequência (opcional)</label>
@@ -76,13 +76,21 @@ export function openContactSheet(c: Customer | null, onSaved?: (c: Customer) => 
     </div>
     <div class="status-line" id="ct-status"></div>
   `, () => {
+    document.querySelectorAll('#ct-gender .seg-btn').forEach((b) => {
+      (b as HTMLElement).onclick = () => {
+        const g = (b as HTMLElement).getAttribute('data-g') as string;
+        gender = gender === g ? '' : g;   // tocar de novo no ativo volta pra "não informar"
+        document.querySelectorAll('#ct-gender .seg-btn').forEach((x) => x.classList.remove('sel'));
+        if (gender) b.classList.add('sel');
+      };
+    });
     byId('ct-save').onclick = async () => {
       const dados: any = {
         id: cur.id || undefined,
         name: byId('ct-name').value.trim(),
         phone: byId('ct-phone').value.trim(),
         email: byId('ct-email').value.trim(),
-        gender: byId('ct-gender').value,
+        gender,
         sequencia: (byId('ct-seq') as HTMLInputElement).value.trim(),
       };
       const lim = (byId('ct-limite') as HTMLInputElement).value;

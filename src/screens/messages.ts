@@ -1,4 +1,4 @@
-import type { Customer, CustomList } from '../types.js';
+import type { Customer, CustomList, Template, TemplateGender, MsgState } from '../types.js';
 import { state, sessionValid, save } from '../state.js';
 import { app, render } from '../render.js';
 import { pad } from '../dateUtils.js';
@@ -23,32 +23,31 @@ export function openMsg() {
   render();
   window.scrollTo(0, 0);
 }
+const EMPTY_MSG: MsgState = { id: null, title: '', body: '', gender: 'outro' };
+function toMsg(t?: Template | null): MsgState {
+  return t
+    ? { id: t.id ?? null, title: t.title, body: t.body, gender: t.gender || 'outro' }
+    : { ...EMPTY_MSG };
+}
 function selectFirstTemplate() {
-  const first = filteredTemplates()[0];
-  state.msg = first
-    ? { id: first.id ?? null, title: first.title, body: first.body }
-    : { id: null, title: '', body: '' };
+  state.msg = toMsg(filteredTemplates()[0]);
 }
 
 /* ---------------- Filtro do seletor de templates por gênero ----------------
-   Templates não têm campo de gênero — a categoria vem do título (ex.: "ENVIAR LINK /
-   MULHER 🌷"): 'mulher'/'feminino' → 'f', 'homem'/'masculino' → 'm', qualquer outro → 'n'. */
-type GenderKey = 'f' | 'm' | 'n';
-const GENDER_BUTTONS: { key: GenderKey; label: string }[] = [
-  { key: 'f', label: '♀️ Mulher' },
-  { key: 'm', label: '♂️ Homem' },
-  { key: 'n', label: '⚧️ Neutro' },
+   O gênero é um atributo do template (templates.gender no Neon): 'feminino' | 'masculino'
+   | 'outro'. Os 3 botões filtram o seletor por esse atributo; nenhum aceso = mostra todos. */
+type GenderKey = 'f' | 'm' | 'o';
+const GENDER_BUTTONS: { key: GenderKey; label: string; gender: TemplateGender }[] = [
+  { key: 'm', label: '♂️ Homem', gender: 'masculino' },
+  { key: 'f', label: '♀️ Mulher', gender: 'feminino' },
+  { key: 'o', label: '⚧️ Outro', gender: 'outro' },
 ];
-function templateGender(t: { title?: string }): GenderKey {
-  const s = String(t.title || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
-  // Prefixo "M-" / "H-" no título (ex.: "M-Boas-vindas") define o gênero.
-  if (/^m\s*-/.test(s) || /\bmulher\b|feminin/.test(s)) return 'f';
-  if (/^h\s*-/.test(s) || /\bhomem\b|masculin/.test(s)) return 'm';
-  return 'n';
+function genderKey(g: TemplateGender | undefined): GenderKey {
+  return g === 'feminino' ? 'f' : g === 'masculino' ? 'm' : 'o';
 }
-function filteredTemplates() {
+function filteredTemplates(): Template[] {
   if (!state.msgGender) return state.templates;
-  return state.templates.filter(t => templateGender(t) === state.msgGender);
+  return state.templates.filter(t => genderKey(t.gender) === state.msgGender);
 }
 function applyGenderFilter(g: GenderKey) {
   state.msgGender = state.msgGender === g ? '' : g;
@@ -56,9 +55,7 @@ function applyGenderFilter(g: GenderKey) {
   // Template já salvo que sai da lista filtrada → cai no primeiro que restou.
   // Template novo (id null, ainda sem salvar) é preservado.
   if (state.msg.id != null && !list.some(t => String(t.id) === String(state.msg.id))) {
-    state.msg = list[0]
-      ? { id: list[0].id ?? null, title: list[0].title, body: list[0].body }
-      : { id: null, title: '', body: '' };
+    state.msg = toMsg(list[0]);
   }
   render();
 }
@@ -68,8 +65,9 @@ function greetingNow(): string {
   if (h >= 12 && h < 18) return 'Boa tarde';
   return 'Boa noite';
 }
-// Gender agreement for the contact: masculine → "o", feminine → "a", other/unset → "o(a)".
-// E.g. "atendê-l{oa}" becomes atendê-lo / atendê-la / atendê-lo(a).
+// Gender agreement for the contact, from the customer's `gender` attribute (never guessed
+// from the name): masculino → "o", feminino → "a", outro → "e" (queride, atendê-le),
+// não informado → "o(a)". E.g. "atendê-l{oae}" → atendê-lo / atendê-la / atendê-le / atendê-lo(a).
 // `c` undefined = uses the customer currently selected on screen (state.customerId); pass one
 // explicitly when resolving a template for someone else (ex.: envio em lista).
 function contactGenderSuffix(c?: Customer | null): string {
@@ -77,7 +75,15 @@ function contactGenderSuffix(c?: Customer | null): string {
   const g = cc && cc.gender ? String(cc.gender).toLowerCase() : '';
   if (g === 'masculino') return 'o';
   if (g === 'feminino') return 'a';
+  if (g === 'outro') return 'e';
   return 'o(a)';
+}
+// "promotora" / "promotor" / "promotore" conforme o gênero configurado da consultora.
+function cargoWord(): string {
+  const g = state.config.promotoraGender || 'feminino';
+  if (g === 'feminino') return 'promotora';
+  if (g === 'masculino') return 'promotor';
+  return 'promotore';
 }
 function applyPlaceholders(s: string, contatoOverride?: Customer | null): string {
   const d = new Date();
@@ -86,9 +92,10 @@ function applyPlaceholders(s: string, contatoOverride?: Customer | null): string
   return String(s || '')
     .replace(/{saudacao}/gi, greetingNow())
     .replace(/{contato}/gi, c ? ((c.name || '').trim() || customerLabel(c)) : '')
-    .replace(/{oa}/gi, contactGenderSuffix(c))
+    .replace(/{oae?}/gi, contactGenderSuffix(c))   // {oae} (novo) e {oa} (antigo) — mesma coisa
     .replace(/{hoje}/gi, today)
     .replace(/{promotora}/gi, state.config.promotora || '')
+    .replace(/{cargo}/gi, cargoWord())
     .replace(/{loja}/gi, state.config.loja || '');
 }
 
@@ -101,9 +108,10 @@ export function renderMsg() {
     <div class="ph-table">
       <button type="button" class="ph-row" data-ph="{saudacao}"><code>{saudacao}</code><span>${greetingNow()} <i>(muda com a hora)</i></span></button>
       <button type="button" class="ph-row" data-ph="{contato}"><code>{contato}</code><span>${ct ? esc(customerLabel(ct)) : '<i>nome do contato escolhido</i>'}</span></button>
-      <button type="button" class="ph-row" data-ph="{oa}"><code>{oa}</code><span>${esc(contactGenderSuffix())} <i>— ex.: atendê-l{oa} → atendê-l${esc(contactGenderSuffix())}</i></span></button>
+      <button type="button" class="ph-row" data-ph="{oae}"><code>{oae}</code><span>${esc(contactGenderSuffix())} <i>— ex.: atendê-l{oae} → atendê-l${esc(contactGenderSuffix())}</i></span></button>
       <button type="button" class="ph-row" data-ph="{hoje}"><code>{hoje}</code><span>${todayFmt}</span></button>
       <button type="button" class="ph-row" data-ph="{promotora}"><code>{promotora}</code><span>${esc(state.config.promotora)}</span></button>
+      <button type="button" class="ph-row" data-ph="{cargo}"><code>{cargo}</code><span>${esc(cargoWord())} <i>(muda com o gênero da promotora)</i></span></button>
       <button type="button" class="ph-row" data-ph="{loja}"><code>{loja}</code><span>${esc(state.config.loja)}</span></button>
     </div>`;
 
@@ -157,11 +165,18 @@ export function renderMsg() {
         <label>Template</label>
         ${genderFilter}
         <select id="tpl-sel">${options}</select>
-        ${state.msgGender && !tpls.length ? '<div class="hint-inline">Nenhum template com esse gênero no título.</div>' : ''}
+        ${state.msgGender && !tpls.length ? '<div class="hint-inline">Nenhum template para esse gênero.</div>' : ''}
       </div>
       <div class="field">
         <label>Título</label>
         <input id="tpl-title" type="text" value="${esc(cur.title)}" placeholder="Ex.: Boas-vindas" />
+      </div>
+      <div class="field">
+        <label>Gênero do destinatário</label>
+        <div class="seg-control gender-filter" id="tpl-gender">
+          ${GENDER_BUTTONS.map(b =>
+            `<button type="button" class="seg-btn${genderKey(cur.gender) === b.key ? ' sel' : ''}" data-tg="${b.gender}">${b.label}</button>`).join('')}
+        </div>
       </div>
       <div class="field">
         <label>Mensagem</label>
@@ -191,10 +206,15 @@ export function renderMsg() {
   }
   byId('tpl-sel').onchange = (e: Event) => {
     const id = (e.target as HTMLSelectElement).value;
-    const t = state.templates.find(x => String(x.id) === String(id));
-    state.msg = t ? { id: t.id ?? null, title: t.title, body: t.body } : { id: null, title: '', body: '' };
+    state.msg = toMsg(state.templates.find(x => String(x.id) === String(id)));
     render();
   };
+  document.querySelectorAll('#tpl-gender [data-tg]').forEach(btn => {
+    (btn as HTMLElement).onclick = () => {
+      state.msg.gender = (btn as HTMLElement).getAttribute('data-tg') as TemplateGender;
+      render();
+    };
+  });
   byId('tpl-title').oninput = (e: Event) => { state.msg.title = (e.target as HTMLInputElement).value; };
   byId('tpl-body').oninput = (e: Event) => { state.msg.body = (e.target as HTMLTextAreaElement).value; };
   // Clickable shortcuts: insert the placeholder at the cursor position
@@ -243,13 +263,13 @@ async function saveTemplate() {
   try {
     const res = await fetch(apiUrl('/api/templates'), {
       method: 'POST', headers: authHeaders(),
-      body: JSON.stringify({ template: { id: t.id || undefined, title: t.title, body: t.body } }),
+      body: JSON.stringify({ template: { id: t.id || undefined, title: t.title, body: t.body, gender: t.gender } }),
     });
     if (res.status === 401) { refreshSession(); toast('Faça login novamente', 'err'); return; }
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'falha');
     await pullTemplates();
-    state.msg = { id: data.template.id, title: data.template.title, body: data.template.body };
+    state.msg = toMsg(data.template);
     render();
     toast('Template salvo ✓', 'ok');
   } catch (e: any) { toast('Erro: ' + e.message, 'err'); }
@@ -257,7 +277,7 @@ async function saveTemplate() {
 
 async function deleteTemplate() {
   const t = state.msg;
-  if (!t.id) { state.msg = { id: null, title: '', body: '' }; render(); return; }
+  if (!t.id) { state.msg = { ...EMPTY_MSG }; render(); return; }
   if (!window.confirm('Excluir o template “' + t.title + '”?')) return;
   if (!isOnline() || !sessionValid()) { toast('Conecte à internet para excluir', 'err'); return; }
   try {

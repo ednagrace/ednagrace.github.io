@@ -53,10 +53,13 @@ export interface Customer {
   ultimoEvento?: CustomerEvent | null;
 }
 
+export type TemplateGender = 'feminino' | 'masculino' | 'outro';
+
 export interface Template {
   id?: string | number;
   title: string;
   body: string;
+  gender?: TemplateGender;
 }
 
 // Lista customizada de clientes pra envio de template em massa (Mensagens → Lista). Diferente
@@ -77,6 +80,9 @@ export interface Session {
 
 export interface Config {
   promotora: string;
+  // Gênero de quem faz as consultas (Edna é 'feminino'). Usado no placeholder {cargo}
+  // dos templates: promotora / promotor / promotore.
+  promotoraGender: TemplateGender;
   loja: string;
   metaDia: number;
   headerColor: string;
@@ -98,6 +104,7 @@ export interface MsgState {
   id: string | number | null;
   title: string;
   body: string;
+  gender: TemplateGender;
 }
 
 export type ViewName = 'list' | 'form' | 'panel' | 'msg' | 'import' | 'customers';
@@ -115,10 +122,9 @@ export interface AppState {
   // Tela de Mensagens: pra quem enviar — 1 pessoa (customerId) ou uma lista. Estado só de tela,
   // não persiste — volta pra 'pessoa' toda vez que a tela de Mensagens é aberta de novo.
   msgDestMode: 'pessoa' | 'lista';
-  // Tela de Mensagens: filtro do seletor de templates por gênero, inferido do título
-  // ('mulher'/'feminino' → 'f', 'homem'/'masculino' → 'm', qualquer outro → 'n').
-  // '' = sem filtro. Estado só de tela, não persiste.
-  msgGender: '' | 'f' | 'm' | 'n';
+  // Tela de Mensagens: filtro do seletor de templates pelo atributo `gender` do template
+  // (feminino → 'f', masculino → 'm', outro → 'o'). '' = sem filtro. Só de tela, não persiste.
+  msgGender: '' | 'f' | 'm' | 'o';
   customerId: string | number | null;
   imp: ImportState;
   view: ViewName;

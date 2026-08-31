@@ -475,7 +475,8 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .seg-control { display: flex; border: 1.5px solid var(--line); border-radius: 14px; padding: 3px; gap: 3px; }
 .seg-btn { flex: 1; height: 44px; border: none; border-radius: 11px; background: none; color: var(--muted); font-size: 14px; font-weight: 700; }
 .seg-btn.sel { background: var(--red); color: #fff; }
-/* Filtro de gênero do seletor de templates: 3 botões, texto menor pra caber no celular */
+/* Seletor de gênero em 3 botões (filtro de templates, gênero da promotora, gênero do cliente):
+   texto menor e um respiro embaixo pra caber no celular. */
 .gender-filter { margin-bottom: 8px; }
 .gender-filter .seg-btn { height: 40px; font-size: 13px; padding: 0 4px; }
 

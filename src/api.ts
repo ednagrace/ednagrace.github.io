@@ -139,6 +139,7 @@ export function businessSettings() {
     metas: state.metas,
     metaDia: Number(state.config.metaDia) || 3,
     promotora: state.config.promotora,
+    promotoraGender: state.config.promotoraGender || 'feminino',
     loja: state.config.loja,
     headerColor: state.config.headerColor || '',
     birthDate: state.config.birthDate || '',
@@ -173,6 +174,7 @@ export async function pullSettings() {
       if (s.metas && typeof s.metas === 'object') { state.metas = Object.assign({}, s.metas); save(LS.metas, state.metas); }
       if (typeof s.metaDia !== 'undefined') state.config.metaDia = Number(s.metaDia) || 0;
       if (s.promotora) state.config.promotora = s.promotora;
+      if (['feminino', 'masculino', 'outro'].includes(s.promotoraGender)) state.config.promotoraGender = s.promotoraGender;
       if (s.loja) state.config.loja = s.loja;
       if (typeof s.headerColor !== 'undefined') state.config.headerColor = s.headerColor;
       if (typeof s.birthDate !== 'undefined') state.config.birthDate = s.birthDate;
