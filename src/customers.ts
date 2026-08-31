@@ -79,17 +79,27 @@ function fmtDateBR(iso?: string | null): string {
   return pad(d.getDate()) + '/' + pad(d.getMonth() + 1);
 }
 
-// `tipo` vem cru da digitalização das fotos (ex.: "nota-geral;proposta-reprovada") — pode
-// ter mais de uma etiqueta separada por ";". Mostra só a mais relevante, não a lista toda.
-// Mesma lista usada no <select> de "nova nota" — precisa bater com TIPOS_EVENTO em
+export interface TipoDef { value: string; emoji: string; label: string; desc: string }
+// Opções oferecidas ao criar uma nota nova. Cada resultado aparece só uma vez aqui — antes
+// "Cartão aprovado" e "Aprovada" eram duas entradas pro mesmo resultado (uma do vocabulário
+// atual do app, outra herdada da digitalização do caderno antigo), confuso na hora de escolher.
+// Mesma lista usada no formulário de "Nova nota" — precisa bater com TIPOS_EVENTO em
 // relatorio-api/api/customers.js.
+export const TIPOS_NOVA_NOTA: TipoDef[] = [
+  { value: 'cartao-aprovado', emoji: '✅', label: 'Cartão aprovado', desc: 'Proposta ou cartão aprovado.' },
+  { value: 'proposta-reprovada', emoji: '❌', label: 'Reprovada', desc: 'Proposta recusada.' },
+  { value: 'link-pendente', emoji: '🔗', label: 'Link pendente', desc: 'Aguardando o cliente preencher o link enviado.' },
+  { value: 'ficha-cartao', emoji: '📇', label: 'Ficha de cartão', desc: 'Ficha/proposta preenchida, aguardando decisão.' },
+  { value: 'nota-geral', emoji: '🗒️', label: 'Nota geral', desc: 'Observação solta, sem categoria específica.' },
+];
+// `tipo` vem cru da digitalização das fotos (ex.: "nota-geral;proposta-reprovada") — pode ter
+// mais de uma etiqueta separada por ";". Rótulos pra EXIBIR qualquer tag já usada em algum
+// evento — inclui `proposta-aprovada`, tag antiga da digitalização que não aparece mais como
+// opção em "Nova nota" (mesmo significado de `cartao-aprovado`), mas que eventos antigos ainda
+// carregam e precisam mostrar certo.
 export const TIPO_LABELS: [string, string][] = [
-  ['cartao-aprovado', '✅ Cartão aprovado'],
-  ['proposta-aprovada', '✅ Aprovada'],
-  ['proposta-reprovada', '❌ Reprovada'],
-  ['link-pendente', '🔗 Link pendente'],
-  ['ficha-cartao', '📇 Ficha de cartão'],
-  ['nota-geral', '🗒️ Nota'],
+  ...TIPOS_NOVA_NOTA.map((t): [string, string] => [t.value, t.emoji + ' ' + t.label]),
+  ['proposta-aprovada', '✅ Cartão aprovado'],
 ];
 export function eventLabel(ev: CustomerEvent): string {
   const tags = String(ev.tipo || '').split(';').map((s) => s.trim());

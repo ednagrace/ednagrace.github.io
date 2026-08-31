@@ -59,6 +59,15 @@ export interface Template {
   body: string;
 }
 
+// Lista customizada de clientes pra envio de template em massa (Mensagens → Lista). Diferente
+// das categorias fixas (calculadas na hora a partir do último evento de cada customer), listas
+// customizadas guardam os membros explicitamente e são sincronizadas via /api/settings.
+export interface CustomList {
+  id: string;
+  name: string;
+  customerIds: (string | number)[];
+}
+
 export interface Session {
   token?: string;
   email?: string;
@@ -101,7 +110,15 @@ export interface AppState {
   session: Session;
   templates: Template[];
   customers: Customer[];
+  customLists: CustomList[];
   msg: MsgState;
+  // Tela de Mensagens: pra quem enviar — 1 pessoa (customerId) ou uma lista. Estado só de tela,
+  // não persiste — volta pra 'pessoa' toda vez que a tela de Mensagens é aberta de novo.
+  msgDestMode: 'pessoa' | 'lista';
+  // Tela de Mensagens: filtro do seletor de templates por gênero, inferido do título
+  // ('mulher'/'feminino' → 'f', 'homem'/'masculino' → 'm', qualquer outro → 'n').
+  // '' = sem filtro. Estado só de tela, não persiste.
+  msgGender: '' | 'f' | 'm' | 'n';
   customerId: string | number | null;
   imp: ImportState;
   view: ViewName;

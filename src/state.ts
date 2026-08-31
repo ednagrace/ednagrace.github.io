@@ -26,7 +26,10 @@ export const state: AppState = {
   session: load(LS.session, {}),        // { token, email, name, exp }
   templates: load(LS.templates, []),    // [{ id, title, body }]
   customers: load(LS.customers, []),    // cadastro unificado (Clientes screen + agenda WhatsApp)
+  customLists: load(LS.customLists, []), // listas customizadas de envio (tela de Mensagens)
   msg:     { id: null, title: '', body: '' },
+  msgDestMode: 'pessoa',                // tela de Mensagens: 'pessoa' ou 'lista' — não persiste
+  msgGender: '',                        // tela de Mensagens: filtro de templates por gênero — não persiste
   customerId: null,                     // customer selected on the Messages screen
   imp:     { file: null, fileName: '', sheetUrl: '', preview: null, busy: false },
   view:    'list',

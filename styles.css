@@ -377,6 +377,19 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .msg-actions .btn-save { flex: 2 1 auto; height: 52px; border: none; border-radius: 14px; background: var(--red); color: #fff; font-size: 16px; font-weight: 800; }
 .msg-actions .btn-save:active { background: var(--red-dark); }
 
+/* ---------- Lista de tipo com descrição (Nova nota) ---------- */
+.tipo-list { display: flex; flex-direction: column; gap: 8px; }
+.tipo-row {
+  display: flex; align-items: center; gap: 12px; padding: 11px 14px;
+  border: 1.5px solid var(--line); border-radius: 12px; cursor: pointer;
+}
+.tipo-row.sel { border-color: var(--red); background: var(--red-soft); }
+.tipo-row-ico { font-size: 20px; flex: 0 0 auto; }
+.tipo-row-body { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.tipo-row-label { font-weight: 700; font-size: 14.5px; color: var(--ink); }
+.tipo-row-body small { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.tipo-row input[type="radio"] { width: 20px; height: 20px; accent-color: var(--red); flex: 0 0 auto; }
+
 /* ---------- Botão gerar PDF (dentro do formulário) ---------- */
 .pdf-btn {
   width: 100%; margin-top: 20px; height: 52px; border-radius: 14px;
@@ -445,6 +458,47 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
   font-size: 16px; font-weight: 600; width: 100%; background: none; border-left: none; border-right: none; border-top: none; text-align: left;
 }
 .sheet .menu-item .mi-ico { font-size: 22px; }
+.mi-pin { font-size: 12px; margin-right: 3px; }
+
+/* ---------- Linha de lista customizada (nome + editar, sem botão aninhado) ---------- */
+.sheet .menu-item.lista-row { padding: 4px; gap: 4px; }
+.sheet .menu-item.lista-row .mi-main {
+  flex: 1; display: flex; align-items: center; gap: 12px; background: none; border: none;
+  padding: 11px 4px; text-align: left; font-size: 16px; font-weight: 600; color: var(--ink);
+}
+.sheet .menu-item.lista-row .mi-edit {
+  flex: 0 0 auto; width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line);
+  background: #fff; font-size: 16px;
+}
+
+/* ---------- Seletor Pessoa / Lista (tela de Mensagens) ---------- */
+.seg-control { display: flex; border: 1.5px solid var(--line); border-radius: 14px; padding: 3px; gap: 3px; }
+.seg-btn { flex: 1; height: 44px; border: none; border-radius: 11px; background: none; color: var(--muted); font-size: 14px; font-weight: 700; }
+.seg-btn.sel { background: var(--red); color: #fff; }
+/* Filtro de gênero do seletor de templates: 3 botões, texto menor pra caber no celular */
+.gender-filter { margin-bottom: 8px; }
+.gender-filter .seg-btn { height: 40px; font-size: 13px; padding: 0 4px; }
+
+/* ---------- Rótulo de seção dentro do sheet (ex.: "Minhas listas") ---------- */
+.sheet-subhead { font-size: 12.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; }
+
+/* ---------- Barra "X selecionados / marcar todos" ---------- */
+.lista-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.lista-toolbar .link-btn { background: none; border: none; color: var(--red); font-weight: 700; font-size: 13.5px; padding: 4px; flex: 0 0 auto; }
+
+/* ---------- Rodapé fixo dentro do sheet: some com o padding do .sheet para ficar rente à
+   borda, mas mantém o mesmo fundo branco (a folga extra do padding-bottom do .sheet, se
+   sobrar em telas com "notch", fica invisível — branco sobre branco). ---------- */
+.sheet-sticky-footer {
+  position: sticky; bottom: 0; margin: 14px -18px -20px;
+  padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
+  background: rgba(255,255,255,.98); backdrop-filter: blur(6px);
+  border-top: 1px solid var(--line); display: flex; gap: 10px; border-radius: 0 0 20px 20px;
+}
+.sheet-sticky-footer button {
+  flex: 1; height: 50px; border-radius: 12px; border: none; font-size: 16px; font-weight: 700;
+  background: var(--red); color: #fff;
+}
 .app-version { text-align: center; font-size: 11px; color: var(--muted); margin-top: 14px; letter-spacing: .03em; line-height: 1.7; }
 .app-version b { color: var(--red-dark); font-weight: 700; letter-spacing: .04em; }
 
