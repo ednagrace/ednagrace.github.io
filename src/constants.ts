@@ -56,7 +56,7 @@ export const ALLOWLIST = [
 ];
 
 export const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-export const APP_VERSION = 'v66'; // bump together with sw.js's CACHE on every release
+export const APP_VERSION = 'v67'; // bump together with sw.js's CACHE on every release
 export const ADMIN_EMAIL = 'jpantunesdesouza@gmail.com';
 
 export const DEFAULT_META = 22; // default monthly goal for approved proposals (editable)

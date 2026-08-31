@@ -40,9 +40,10 @@ const GENDER_BUTTONS: { key: GenderKey; label: string }[] = [
   { key: 'n', label: '⚧️ Neutro' },
 ];
 function templateGender(t: { title?: string }): GenderKey {
-  const s = String(t.title || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  if (/\bmulher\b|feminin/.test(s)) return 'f';
-  if (/\bhomem\b|masculin/.test(s)) return 'm';
+  const s = String(t.title || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  // Prefixo "M-" / "H-" no título (ex.: "M-Boas-vindas") define o gênero.
+  if (/^m\s*-/.test(s) || /\bmulher\b|feminin/.test(s)) return 'f';
+  if (/^h\s*-/.test(s) || /\bhomem\b|masculin/.test(s)) return 'm';
   return 'n';
 }
 function filteredTemplates() {
