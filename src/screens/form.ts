@@ -7,6 +7,7 @@ import { todayISO, monthKeyOf, parseISO, pad } from '../dateUtils.js';
 import { esc, byId, informed, haptic, numOrNull } from '../format.js';
 import { metaFor, metaDiaVal } from '../aggregations.js';
 import { isOnline, getReport, enqueue, upsertCache, apiSave, deleteReportByDate } from '../api.js';
+import { aiPhotoMeta, sendPhotoReport, setAiQuota } from '../api.js';
 import { sharePDF } from '../pdf.js';
 import { toast } from '../ui.js';
 
@@ -16,6 +17,7 @@ export function openForm(dataISO: string) {
   state.editing = existing || blankReport(dataISO);
   state.editingNew = !existing;
   state.view = 'form';
+  resetPhoto();
   render();
   window.scrollTo(0, 0);
 }
@@ -25,8 +27,150 @@ export function openNew() {
   state.editing = blankReport(todayISO());
   state.editingNew = true;
   state.view = 'form';
+  resetPhoto();
   render();
   window.scrollTo(0, 0);
+}
+
+/* ---------- "Preencher com uma foto" (leitura por IA, dentro do form) ----------
+   O próprio formulário é a tela de rascunho: a foto preenche os contadores e a
+   promotora confere/corrige ali mesmo antes de salvar. Nada é gravado aqui.
+   No ambiente de teste, a feature é só do administrador — e só ele vê e mexe no
+   liga/desliga da cota. O back-end também barra (não confia só no front). */
+function resetPhoto() {
+  state.photo = { busy: false, meta: null, error: '' };
+  aiPhotoMeta().then((m) => {
+    if (state.view === 'form') { state.photo.meta = m; refreshPhotoBar(); }
+  });
+}
+
+function photoBarHTML(): string {
+  const p = state.photo;
+  const m = p.meta;
+
+  // Ambiente de teste + não-admin: a feature nem aparece.
+  if (m && !m.allowed) {
+    return '<div class="ph-hint">📸 Leitura por foto indisponível no ambiente de teste.</div>';
+  }
+
+  const u = m && m.usage;
+  const quotaOn = !m || m.quotaEnabled;
+  const blocked = !!u && quotaOn && !u.podeUsar;
+
+  let cota = '';
+  if (m && !quotaOn) {
+    cota = '<span class="ph-cota warn">Cota desligada (teste)</span>';
+  } else if (u) {
+    cota = blocked
+      ? '<span class="ph-cota warn">Limite atingido — a cota zera na segunda-feira</span>'
+      : `<span class="ph-cota">resta ${Math.max(0, u.limiteDia - u.dia)} hoje · ${Math.max(0, u.limiteSemana - u.semana)} na semana</span>`;
+  }
+
+  const toggle = (m && m.canToggleQuota)
+    ? `<button type="button" class="ph-toggle" id="ph-toggle">Cota: <b>${m.quotaEnabled ? 'ligada' : 'desligada'}</b> · ${m.quotaEnabled ? 'desligar' : 'ligar'}</button>`
+    : '';
+
+  return `
+    <button type="button" class="pdf-btn ph-btn" id="btn-photo-fill" ${(p.busy || blocked) ? 'disabled' : ''}>
+      ${p.busy ? '⏳ Lendo a foto…' : '📸 Preencher com uma foto'}
+    </button>
+    <div class="ph-hint">${p.error ? `<span class="warn">${esc(p.error)}</span>` : cota}</div>
+    ${toggle}`;
+}
+
+// Re-renders just the photo bar (button label / quota / error) without rebuilding
+// the whole form, so it doesn't fight the counters while they're being edited.
+function refreshPhotoBar() {
+  const bar = byId('photo-bar');
+  if (!bar) return;
+  bar.innerHTML = photoBarHTML();
+  wirePhotoBar();
+}
+
+function wirePhotoBar() {
+  const btn = byId('btn-photo-fill');
+  const file = byId('photo-file');
+  if (btn && file) btn.onclick = () => file.click();
+  if (file) file.onchange = onPhotoPicked;
+  const tog = byId('ph-toggle');
+  if (tog) tog.onclick = onToggleQuota;
+}
+
+async function onToggleQuota() {
+  const m = state.photo.meta;
+  if (!m || !m.canToggleQuota) return;
+  const tog = byId('ph-toggle');
+  if (tog) tog.disabled = true;
+  try {
+    const next = await setAiQuota(!m.quotaEnabled);
+    if (next) state.photo.meta = next;
+    toast(next && next.quotaEnabled ? 'Cota ligada' : 'Cota desligada', 'ok');
+  } catch (e: any) {
+    toast(e.message || 'não foi possível alterar a cota', 'err');
+  }
+  refreshPhotoBar();
+}
+
+// Reduz a imagem antes de enviar: upload menor, resposta mais rápida/barata e sem
+// esbarrar no limite de tamanho da função serverless. 'from-image' respeita a
+// orientação EXIF (foto deitada não vira de lado).
+async function downscalePhoto(
+  file: File, maxDim = 1568, quality = 0.82,
+): Promise<string> {
+  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
+  const w = Math.max(1, Math.round(bmp.width * scale));
+  const h = Math.max(1, Math.round(bmp.height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+  ctx.drawImage(bmp, 0, 0, w, h);
+  bmp.close();
+  return canvas.toDataURL('image/jpeg', quality).split(',')[1] || '';
+}
+
+async function onPhotoPicked(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const f = input.files && input.files[0];
+  input.value = '';   // allows re-picking the same file later
+  if (!f) return;
+  const p = state.photo;
+  if (p.busy) return;
+  if (!isOnline()) { toast('Conecte à internet para ler a foto', 'err'); return; }
+
+  p.busy = true; p.error = '';
+  refreshPhotoBar();
+
+  try {
+    const base64 = await downscalePhoto(f);
+    if (!base64) throw new Error('não consegui abrir essa imagem');
+    const { draft, meta } = await sendPhotoReport(base64, 'image/jpeg');
+    if (meta) p.meta = meta;
+
+    const r = state.editing as Report;
+    // Preenche só os campos que a foto leu como número; o resto fica como está
+    // (não apaga o que a promotora já tenha digitado).
+    NUMERIC_KEYS.forEach((k) => {
+      if (typeof draft[k] === 'number' && Number.isFinite(draft[k])) r[k] = draft[k];
+    });
+    if (!String(r.obs || '').trim() && typeof draft.obs === 'string') r.obs = draft.obs;
+    // Data: só num relatório novo e se a foto trouxe uma data plausível.
+    if (state.editingNew && typeof draft.data === 'string'
+        && /^\d{4}-\d{2}-\d{2}$/.test(draft.data) && draft.data <= todayISO()) {
+      r.data = draft.data;
+    }
+
+    p.busy = false;
+    render();   // rebuilds the counters with the values read
+    window.scrollTo(0, 0);
+    toast('Confira os números lidos da foto ✍️', 'ok');
+  } catch (err: any) {
+    p.busy = false;
+    if (err && err.meta) p.meta = err.meta;
+    p.error = (err && err.message) || 'não consegui ler a foto';
+    refreshPhotoBar();
+  }
 }
 
 function propostasTotal(r: Report): number {
@@ -79,6 +223,9 @@ export function renderForm() {
         <div class="propostas-badge" id="propostas-badge">📋 <b id="propostas-num">${propostasTotal(r)}</b> propostas</div>
       </div>
 
+      <div id="photo-bar" class="photo-bar">${photoBarHTML()}</div>
+      <input type="file" id="photo-file" accept="image/*" capture="environment" hidden />
+
       ${groupsHTML}
 
       <div class="group obs">
@@ -96,6 +243,7 @@ export function renderForm() {
   `;
 
   // eventos gerais
+  wirePhotoBar();
   byId('btn-back').onclick = byId('btn-cancel').onclick = () => { state.view = 'list'; render(); };
   byId('f-data').onchange = (e: Event) => { r.data = (e.target as HTMLInputElement).value; };
   byId('f-obs').oninput = (e: Event) => { r.obs = (e.target as HTMLTextAreaElement).value; };

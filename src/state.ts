@@ -33,6 +33,7 @@ export const state: AppState = {
   msgGender: '',                        // tela de Mensagens: filtro de templates por gênero — não persiste
   customerId: null,                     // customer selected on the Messages screen
   imp:     { file: null, fileName: '', sheetUrl: '', preview: null, busy: false },
+  photo:   { busy: false, meta: null, error: '' },
   view:    'list',
   month:   currentMonthKey(),
   search:  '',

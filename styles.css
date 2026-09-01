@@ -204,6 +204,21 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 }
 .propostas-badge b { font-size: 18px; font-weight: 800; }
 
+/* ---------- "Preencher com uma foto" (dentro do formulário) ---------- */
+.photo-bar { margin-top: 12px; }
+.photo-bar .ph-btn { margin-top: 0; }
+.photo-bar .ph-btn:disabled { opacity: .55; }
+.ph-hint { font-size: 12px; color: var(--muted); margin-top: 6px; text-align: center; min-height: 15px; }
+.ph-hint .warn { color: var(--red-dark); font-weight: 700; }
+.ph-cota.warn { color: var(--amber); font-weight: 700; }
+/* Liga/desliga da cota — só o administrador vê, e só no ambiente de teste. */
+.ph-toggle {
+  display: block; margin: 8px auto 0; background: none; border: none;
+  font-size: 12px; color: var(--muted); text-decoration: underline; padding: 4px;
+}
+.ph-toggle b { color: var(--ink); }
+.ph-toggle:disabled { opacity: .5; }
+
 .group { margin-top: 18px; }
 .group > h2 {
   font-size: 13px; text-transform: uppercase; letter-spacing: .06em;

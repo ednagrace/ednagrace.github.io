@@ -1,4 +1,4 @@
-import type { Report, Customer, CustomerEvent } from './types.js';
+import type { Report, Customer, CustomerEvent, PhotoMeta } from './types.js';
 import { API_BASE, apiUrl } from './env.js';
 import { LS } from './env.js';
 import { state, save, sessionValid } from './state.js';
@@ -34,6 +34,52 @@ export async function apiSave(report: Report) {
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || 'Erro ao salvar');
   return data;
+}
+
+/* ---------- Relatório a partir de uma foto (leitura por IA) ---------- */
+// Estado da feature para o usuário logado (cota, admin, ambiente). Null = sem
+// conexão/sessão — a barra mostra "verificando" (o servidor decide de qualquer jeito).
+export async function aiPhotoMeta(): Promise<PhotoMeta | null> {
+  if (!API_BASE || !sessionValid() || !isOnline()) return null;
+  try {
+    const res = await fetch(apiUrl('/api/reports?aiUsage=1'), { headers: authHeaders() });
+    if (res.status === 401) { refreshSession(); return null; }
+    const data = await res.json();
+    return data && data.ok ? (data.meta as PhotoMeta) : null;
+  } catch (e) { return null; }
+}
+
+// Envia a foto (JPEG em base64), o servidor lê com o Claude e devolve um rascunho.
+// NÃO grava nada — o app preenche os campos do formulário para conferência.
+export async function sendPhotoReport(
+  imageBase64: string, mediaType: string,
+): Promise<{ draft: Record<string, any>; meta: PhotoMeta | null }> {
+  if (!API_BASE) throw new Error('API não configurada.');
+  const res = await fetch(apiUrl('/api/reports'), {
+    method: 'POST', headers: authHeaders(),
+    body: JSON.stringify({ photo: { imageBase64, mediaType } }),
+  });
+  if (res.status === 401) { refreshSession(); throw new Error('sessão expirada'); }
+  const data = await res.json();
+  if (!data.ok) {
+    const err: any = new Error(data.error || 'Erro ao ler a foto');
+    err.meta = data.meta || null;
+    throw err;
+  }
+  return { draft: data.draft || {}, meta: data.meta || null };
+}
+
+// Liga/desliga a cota (admin, só no ambiente de teste — o back-end recusa o resto).
+export async function setAiQuota(enabled: boolean): Promise<PhotoMeta | null> {
+  if (!API_BASE) throw new Error('API não configurada.');
+  const res = await fetch(apiUrl('/api/reports'), {
+    method: 'POST', headers: authHeaders(),
+    body: JSON.stringify({ aiConfig: { quotaEnabled: enabled } }),
+  });
+  if (res.status === 401) { refreshSession(); throw new Error('sessão expirada'); }
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'não foi possível alterar a cota');
+  return (data.meta as PhotoMeta) || null;
 }
 
 export async function apiDelete(dataISO: string) {

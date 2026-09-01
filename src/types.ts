@@ -103,6 +103,34 @@ export interface ImportState {
   busy: boolean;
 }
 
+// Cota da leitura de relatório por foto (protege o crédito da API Claude).
+// A semana começa na segunda-feira (horário de Brasília) — vem calculada do servidor.
+export interface AiUsage {
+  dia: number;
+  semana: number;
+  limiteDia: number;
+  limiteSemana: number;
+  podeUsar: boolean;
+}
+
+// Estado da feature "Preencher com uma foto" para o usuário logado (vem do back-end,
+// que é a fonte da verdade sobre ambiente/admin).
+export interface PhotoMeta {
+  usage: AiUsage;
+  quotaEnabled: boolean;   // cota sendo aplicada? (só o admin desliga, só no teste)
+  isAdmin: boolean;
+  staging: boolean;
+  allowed: boolean;        // pode usar a feature aqui? (no teste, só o admin)
+  canToggleQuota: boolean; // vê e mexe no liga/desliga da cota? (admin + teste)
+}
+
+// "Preencher com uma foto" (botão dentro do formulário): só de tela, não persiste.
+export interface PhotoState {
+  busy: boolean;
+  meta: PhotoMeta | null;
+  error: string;
+}
+
 export interface MsgState {
   id: string | number | null;
   title: string;
@@ -130,6 +158,7 @@ export interface AppState {
   msgGender: '' | 'f' | 'm' | 'o';
   customerId: string | number | null;
   imp: ImportState;
+  photo: PhotoState;
   view: ViewName;
   month: string; // 'YYYY-MM'
   search: string;
