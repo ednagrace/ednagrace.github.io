@@ -208,6 +208,8 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .photo-bar { margin-top: 12px; }
 .photo-bar .ph-btn { margin-top: 0; }
 .photo-bar .ph-btn:disabled { opacity: .55; }
+.ph-actions { display: flex; gap: 8px; }
+.ph-actions .ph-btn { flex: 1; padding: 0 8px; }
 .ph-hint { font-size: 12px; color: var(--muted); margin-top: 6px; text-align: center; min-height: 15px; }
 .ph-hint .warn { color: var(--red-dark); font-weight: 700; }
 .ph-cota.warn { color: var(--amber); font-weight: 700; }

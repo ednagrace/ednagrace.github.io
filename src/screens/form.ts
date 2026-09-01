@@ -70,10 +70,18 @@ function photoBarHTML(): string {
     ? `<button type="button" class="ph-toggle" id="ph-toggle">Cota: <b>${m.quotaEnabled ? 'ligada' : 'desligada'}</b> · ${m.quotaEnabled ? 'desligar' : 'ligar'}</button>`
     : '';
 
+  // Dois botões explícitos: câmera e galeria. Deixar o sistema "escolher" (input
+  // sem capture) abre direto a galeria em vários aparelhos — aqui a promotora
+  // decide. Enquanto lê a foto, vira um único botão desabilitado.
+  const acoes = p.busy
+    ? `<button type="button" class="pdf-btn ph-btn" disabled>⏳ Lendo a foto…</button>`
+    : `<div class="ph-actions">
+         <button type="button" class="pdf-btn ph-btn" id="btn-photo-cam" ${blocked ? 'disabled' : ''}>📷 Tirar foto</button>
+         <button type="button" class="pdf-btn ph-btn" id="btn-photo-gallery" ${blocked ? 'disabled' : ''}>🖼️ Da galeria</button>
+       </div>`;
+
   return `
-    <button type="button" class="pdf-btn ph-btn" id="btn-photo-fill" ${(p.busy || blocked) ? 'disabled' : ''}>
-      ${p.busy ? '⏳ Lendo a foto…' : '📸 Preencher com uma foto'}
-    </button>
+    ${acoes}
     <div class="ph-hint">${p.error ? `<span class="warn">${esc(p.error)}</span>` : cota}</div>
     ${toggle}`;
 }
@@ -88,9 +96,18 @@ function refreshPhotoBar() {
 }
 
 function wirePhotoBar() {
-  const btn = byId('btn-photo-fill');
-  const file = byId('photo-file');
-  if (btn && file) btn.onclick = () => file.click();
+  const file = byId('photo-file') as HTMLInputElement | null;
+  const cam = byId('btn-photo-cam');
+  const gallery = byId('btn-photo-gallery');
+  // `capture` liga a câmera; sem ele, abre a galeria/arquivos. Trocado na hora do clique.
+  const open = (useCamera: boolean) => {
+    if (!file) return;
+    if (useCamera) file.setAttribute('capture', 'environment');
+    else file.removeAttribute('capture');
+    file.click();
+  };
+  if (cam) cam.onclick = () => open(true);
+  if (gallery) gallery.onclick = () => open(false);
   if (file) file.onchange = onPhotoPicked;
   const tog = byId('ph-toggle');
   if (tog) tog.onclick = onToggleQuota;
