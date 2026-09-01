@@ -224,7 +224,7 @@ export function renderForm() {
       </div>
 
       <div id="photo-bar" class="photo-bar">${photoBarHTML()}</div>
-      <input type="file" id="photo-file" accept="image/*" capture="environment" hidden />
+      <input type="file" id="photo-file" accept="image/*" hidden />
 
       ${groupsHTML}
 
