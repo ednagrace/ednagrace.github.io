@@ -319,19 +319,6 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .hint-inline { font-size: 12px; color: var(--muted); margin-top: 8px; }
 .hint-inline b { color: var(--red-dark); font-weight: 700; }
 
-/* Recado de inclusão — junto dos campos de gênero. Barrinha em arco-íris à esquerda. */
-.hint-incl {
-  border-left: 3px solid transparent;
-  border-image: linear-gradient(180deg,#e40303,#ff8c00,#ffed00,#008026,#004dff,#750787) 1;
-  padding-left: 9px; line-height: 1.5;
-}
-/* Faixa de inclusão maior — rodapé das Configurações e tela de login. */
-.incl-banner {
-  font-size: 12px; color: var(--muted); line-height: 1.5; text-align: center;
-  margin: 16px auto 0; max-width: 32ch; padding-top: 12px;
-  border-top: 2px solid transparent;
-  border-image: linear-gradient(90deg,#e40303,#ff8c00,#ffed00,#008026,#004dff,#750787) 1;
-}
 .ph-table { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .ph-row {
   display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
@@ -408,18 +395,18 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .msg-actions .btn-save { flex: 2 1 auto; height: 52px; border: none; border-radius: 14px; background: var(--red); color: #fff; font-size: 16px; font-weight: 800; }
 .msg-actions .btn-save:active { background: var(--red-dark); }
 
-/* ---------- Lista de tipo com descrição (Nova nota) ---------- */
-.tipo-list { display: flex; flex-direction: column; gap: 8px; }
-.tipo-row {
-  display: flex; align-items: center; gap: 12px; padding: 11px 14px;
-  border: 1.5px solid var(--line); border-radius: 12px; cursor: pointer;
+/* ---------- Seção "Adicionar nota" recolhível (cadastro de cliente) ---------- */
+.nota-box {
+  border: 1.5px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px;
 }
-.tipo-row.sel { border-color: var(--red); background: var(--red-soft); }
-.tipo-row-ico { font-size: 20px; flex: 0 0 auto; }
-.tipo-row-body { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-.tipo-row-label { font-weight: 700; font-size: 14.5px; color: var(--ink); }
-.tipo-row-body small { color: var(--muted); font-size: 12px; margin-top: 2px; }
-.tipo-row input[type="radio"] { width: 20px; height: 20px; accent-color: var(--red); flex: 0 0 auto; }
+.nota-box > summary {
+  cursor: pointer; font-weight: 700; font-size: 14px; color: var(--ink); list-style: none;
+}
+.nota-box > summary::-webkit-details-marker { display: none; }
+.nota-box > summary::after { content: ' ›'; color: var(--muted); }
+.nota-box[open] > summary::after { content: ' ⌄'; }
+.nota-box[open] > summary { margin-bottom: 2px; }
+.nota-box .field:last-child { margin-bottom: 0; }
 
 /* ---------- Botão gerar PDF (dentro do formulário) ---------- */
 .pdf-btn {
@@ -430,6 +417,10 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .pdf-btn:active { background: #f8d4d4; }
 .pdf-btn.btn-wpp { margin-top: 10px; border-color: var(--green); background: var(--green-soft); color: var(--green); }
 .pdf-btn.btn-wpp:active { background: #cfeeda; }
+/* Locked until the report is saved: nothing to turn into a PDF yet. */
+.pdf-btn:disabled { opacity: .5; border-color: var(--line); background: #fff; color: var(--muted); }
+.pdf-btn:disabled:active { background: #fff; }
+.pdf-hint { font-size: 12px; color: var(--muted); margin-top: 6px; text-align: center; }
 
 /* ---------- Botãozinho de PDF no card da lista ---------- */
 .report-card { position: relative; }

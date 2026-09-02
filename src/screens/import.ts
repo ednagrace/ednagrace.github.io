@@ -5,7 +5,7 @@ import { esc, byId } from '../format.js';
 import { isOnline, authHeaders, refreshFromCloud } from '../api.js';
 import { apiUrl } from '../env.js';
 import { refreshSession } from '../auth.js';
-import { toast, openSheet, copyToClipboard } from '../ui.js';
+import { toast, openSheet, copyToClipboard, confirmDiscard } from '../ui.js';
 
 /* ---------------- SCREEN: IMPORT SPREADSHEET ---------------- */
 export function openImport() {
@@ -68,7 +68,13 @@ export function renderImport() {
       ${previewHTML}
     </div>`;
 
-  byId('btn-back').onclick = () => { state.view = 'list'; render(); };
+  byId('btn-back').onclick = () => {
+    const imp = state.imp || {};
+    const dirty = !!(imp.file || (imp.sheetUrl || '').trim() || imp.preview);
+    if (!confirmDiscard(dirty)) return;
+    state.view = 'list';
+    render();
+  };
   byId('imp-modelo').onclick = downloadTemplateFile;
   byId('imp-gsheet').onclick = createGoogleSheet;
   byId('imp-input').onchange = (e: Event) => {

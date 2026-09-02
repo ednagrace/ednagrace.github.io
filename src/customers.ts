@@ -1,6 +1,7 @@
 import type { Customer, CustomerEvent } from './types.js';
 import { state } from './state.js';
 import { toast } from './ui.js';
+import { esc } from './format.js';
 import { pad, parseISO } from './dateUtils.js';
 
 export function currentCustomer(): Customer | null {
@@ -101,6 +102,19 @@ export const TIPO_LABELS: [string, string][] = [
   ...TIPOS_NOVA_NOTA.map((t): [string, string] => [t.value, t.emoji + ' ' + t.label]),
   ['proposta-aprovada', '✅ Cartão aprovado'],
 ];
+// Descrição de um tipo de nota (mostrada numa linha de dica sob o <select>).
+export function tipoDesc(value: string): string {
+  return TIPOS_NOVA_NOTA.find((t) => t.value === value)?.desc || '';
+}
+// <select> de tipo de nota — usado no formulário de "Nova nota" e na seção de
+// nota do cadastro de cliente, pra ficarem idênticos. O <select> nativo é bem
+// mais enxuto no celular que a lista de opções com descrição embaixo de cada uma.
+export function tipoSelectHTML(id: string, selected = TIPOS_NOVA_NOTA[0].value): string {
+  return `<select id="${id}">${TIPOS_NOVA_NOTA.map((t) =>
+    `<option value="${t.value}"${t.value === selected ? ' selected' : ''}>${esc(t.emoji + ' ' + t.label)}</option>`,
+  ).join('')}</select>`;
+}
+
 export function eventLabel(ev: CustomerEvent): string {
   const tags = String(ev.tipo || '').split(';').map((s) => s.trim());
   const found = TIPO_LABELS.find(([tag]) => tags.includes(tag));

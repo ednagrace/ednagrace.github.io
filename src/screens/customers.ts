@@ -4,8 +4,8 @@ import { app, render } from '../render.js';
 import { esc, byId } from '../format.js';
 import { pad, parseISO, todayISO } from '../dateUtils.js';
 import { isOnline, pullCustomers, getCustomerDetalhe, addCustomerEvent } from '../api.js';
-import { customerLabel, customerInfoLine, eventLabel, looksLikeWhatsApp, TIPOS_NOVA_NOTA } from '../customers.js';
-import { openSheet, closeSheet, toast } from '../ui.js';
+import { customerLabel, customerInfoLine, eventLabel, looksLikeWhatsApp, TIPOS_NOVA_NOTA, tipoDesc, tipoSelectHTML } from '../customers.js';
+import { openSheet, closeSheet, toast, confirmDiscard } from '../ui.js';
 import { openContactSheet } from '../components/contatoSheet.js';
 import { syncMsgGenderFromCustomer } from './messages.js';
 
@@ -153,14 +153,8 @@ function openEventoForm(c: Customer, onSaved: () => void) {
     <p class="status-line" style="margin:-4px 0 12px">${esc(customerLabel(c))}</p>
     <div class="field">
       <label>Tipo</label>
-      <div class="tipo-list" id="ef-tipo-list">
-        ${TIPOS_NOVA_NOTA.map((t, i) => `
-          <label class="tipo-row${i === 0 ? ' sel' : ''}">
-            <span class="tipo-row-ico">${t.emoji}</span>
-            <span class="tipo-row-body"><span class="tipo-row-label">${esc(t.label)}</span><small>${esc(t.desc)}</small></span>
-            <input type="radio" name="ef-tipo" value="${t.value}" ${i === 0 ? 'checked' : ''} />
-          </label>`).join('')}
-      </div>
+      ${tipoSelectHTML('ef-tipo')}
+      <div class="status-line" id="ef-tipo-desc">${esc(tipoDesc(TIPOS_NOVA_NOTA[0].value))}</div>
     </div>
     <div class="field">
       <label>Observação</label>
@@ -177,12 +171,8 @@ function openEventoForm(c: Customer, onSaved: () => void) {
     <div class="actions"><button class="primary" id="ef-save" style="flex:1">Salvar nota</button></div>
     <div class="status-line" id="ef-status"></div>
   `, () => {
-    document.querySelectorAll('#ef-tipo-list .tipo-row').forEach((row) => {
-      (row.querySelector('input') as HTMLInputElement).onchange = () => {
-        document.querySelectorAll('#ef-tipo-list .tipo-row').forEach((r) => r.classList.remove('sel'));
-        row.classList.add('sel');
-      };
-    });
+    const tipoSel = byId('ef-tipo') as HTMLSelectElement;
+    tipoSel.onchange = () => { byId('ef-tipo-desc').textContent = tipoDesc(tipoSel.value); };
     byId('ef-save').onclick = async () => {
       const obs = (byId('ef-obs') as HTMLTextAreaElement).value.trim();
       const st = byId('ef-status');
@@ -190,7 +180,6 @@ function openEventoForm(c: Customer, onSaved: () => void) {
       if (!isOnline() || !sessionValid()) { toast('Conecte à internet para salvar', 'err'); return; }
       const btn = byId('ef-save') as HTMLButtonElement;
       btn.disabled = true;
-      const tipoSel = document.querySelector('#ef-tipo-list input:checked') as HTMLInputElement;
       const r = await addCustomerEvent({
         customerId: c.id!,
         tipo: tipoSel.value,
@@ -209,7 +198,8 @@ function openEventoForm(c: Customer, onSaved: () => void) {
       toast('Nota adicionada ✓', 'ok');
       onSaved();
     };
-  });
+  }, () => confirmDiscard(!!(byId('ef-obs') as HTMLTextAreaElement | null)?.value.trim()
+    || !!(byId('ef-retorno') as HTMLInputElement | null)?.value));
 }
 
 function openCustomerDetalhe(c: Customer) {

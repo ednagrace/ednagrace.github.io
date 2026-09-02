@@ -5,9 +5,9 @@ import { pad } from '../dateUtils.js';
 import { esc, byId } from '../format.js';
 import { isOnline, pullCustomers, pullTemplates, authHeaders, saveSettingsRemote } from '../api.js';
 import { apiUrl, LS } from '../env.js';
-import { CARTAO_QUICK_BODY, GENERO_OUTRO_NOTA } from '../constants.js';
+import { CARTAO_QUICK_BODY } from '../constants.js';
 import { refreshSession } from '../auth.js';
-import { toast, openSheet, closeSheet } from '../ui.js';
+import { toast, openSheet, closeSheet, confirmDiscard } from '../ui.js';
 import { currentCustomer, customerLabel, phoneDigits, contactPickerAvailable } from '../customers.js';
 import { openContactSheet, pickFromDeviceContacts } from '../components/contatoSheet.js';
 import { openCustomers } from './customers.js';
@@ -27,9 +27,9 @@ export function openMsg() {
 // dele (mulher → templates de mulher). A usuária pode trocar depois; só é re-sincronizado
 // quando o cliente muda de novo. Chamada nos pontos onde state.customerId muda.
 export function syncMsgGenderFromCustomer() {
-  const g = currentCustomer()?.gender;
-  state.msgGender = g === 'feminino' ? 'f' : g === 'masculino' ? 'm' : g === 'outro' ? 'o' : '';
+  state.msgGender = customerGenderKey(currentCustomer());
   state.msg = toMsg(filteredTemplates()[0]);
+  if (state.msg.id == null) state.msg.gender = filterToTemplateGender();
 }
 const EMPTY_MSG: MsgState = { id: null, title: '', body: '', gender: null };
 function toMsg(t?: Template | null): MsgState {
@@ -39,21 +39,45 @@ function toMsg(t?: Template | null): MsgState {
 }
 function selectFirstTemplate() {
   state.msg = toMsg(filteredTemplates()[0]);
+  if (state.msg.id == null) state.msg.gender = filterToTemplateGender();
+}
+
+// Há edição pendente no editor de template? Compara o que está na tela com o
+// template salvo de mesmo id (ou com um template vazio, se for novo). Robusto aos
+// vários render() da tela (troca de filtro, modo de envio, contato).
+function msgDirty(): boolean {
+  const base = toMsg(state.templates.find(t => String(t.id) === String(state.msg.id)));
+  return base.title !== state.msg.title || base.body !== state.msg.body || base.gender !== state.msg.gender;
 }
 
 /* ---------------- Filtro do seletor de templates por gênero ----------------
    `gender` no Neon: 'feminino' | 'masculino' | 'outro' (mensagem escrita para pessoas
    LGBTQIA+) | NULL (gênero não definido). São 4 estados distintos.
    Filtro: "Homem"/"Mulher" mostram só o valor exato; "Outro" mostra 'outro' E NULL,
-   em dois grupos (LGBTQIA+, depois "gênero não definido"). Nenhum botão = todos. */
+   em dois grupos (LGBTQIA+, depois "gênero não definido"). Nenhum botão = todos.
+
+   O mesmo filtro É a classificação do template: ao abrir a tela ele já vem no gênero
+   do cliente (do cadastro — syncMsgGenderFromCustomer), e um template novo/editado é
+   salvo com o `gender` do filtro. Não há um segundo seletor de "gênero do destinatário"
+   — seria a mesma escolha duas vezes. */
 type GenderKey = 'f' | 'm' | 'o';
 const GENDER_BUTTONS: { key: GenderKey; label: string; gender: TemplateGender }[] = [
   { key: 'm', label: '♂️ Homem', gender: 'masculino' },
   { key: 'f', label: '♀️ Mulher', gender: 'feminino' },
   { key: 'o', label: '⚧️ Outro', gender: 'outro' },
 ];
+const GENDER_WORD: Record<GenderKey, string> = { m: 'homem', f: 'mulher', o: 'LGBTQIA+' };
 function genderKey(g: TemplateGender | null | undefined): GenderKey | null {
   return g === 'feminino' ? 'f' : g === 'masculino' ? 'm' : g === 'outro' ? 'o' : null;
+}
+// O gênero do cliente (do cadastro) como chave de filtro. '' = sem gênero definido.
+function customerGenderKey(c?: Customer | null): '' | GenderKey {
+  return genderKey((c?.gender as TemplateGender | null | undefined)) || '';
+}
+// O filtro de gênero é também a classificação (`gender`) do template ao salvar —
+// '' (sem filtro) ↔ null ("gênero não definido"), 'o' ↔ 'outro' (LGBTQIA+).
+function filterToTemplateGender(): TemplateGender | null {
+  return GENDER_BUTTONS.find(b => b.key === state.msgGender)?.gender ?? null;
 }
 function matchesGenderFilter(t: Template): boolean {
   if (!state.msgGender) return true;
@@ -66,7 +90,16 @@ function filteredTemplates(): Template[] {
   return state.templates.filter(matchesGenderFilter).sort(byTitle);
 }
 function applyGenderFilter(g: GenderKey) {
+  const wasDirty = msgDirty();
   state.msgGender = state.msgGender === g ? '' : g;
+  // Template novo: sempre acompanha o filtro (o filtro É a classificação dele).
+  // Template salvo com edição pendente: acompanha o filtro quando deixa de combinar,
+  // pra não sumir da lista no meio da edição. Template salvo e intocado: só navegação.
+  if (state.msg.id == null) {
+    state.msg.gender = filterToTemplateGender();
+  } else if (wasDirty && !matchesGenderFilter(state.msg as unknown as Template)) {
+    state.msg.gender = filterToTemplateGender();
+  }
   const list = filteredTemplates();
   // Template já salvo que sai da lista filtrada → cai no primeiro que restou.
   // Template novo (id null, ainda sem salvar) é preservado.
@@ -172,6 +205,20 @@ export function renderMsg() {
       ${GENDER_BUTTONS.map(b =>
         `<button type="button" class="seg-btn${state.msgGender === b.key ? ' sel' : ''}" data-gf="${b.key}">${b.label}</button>`).join('')}
     </div>`;
+  // O gênero do destinatário vem do cadastro do cliente — o filtro já abre nele
+  // (syncMsgGenderFromCustomer). Esta linha explica isso e deixa voltar num toque.
+  const custKey = mode === 'pessoa' ? customerGenderKey(ct) : '';
+  let genderHint = '';
+  if (mode === 'pessoa' && ct) {
+    const nome = `<b>${esc(customerLabel(ct))}</b>`;
+    if (!custKey) {
+      genderHint = `${nome} está sem gênero no cadastro — mostrando todos os templates.`;
+    } else if (state.msgGender === custKey) {
+      genderHint = `Templates no gênero de ${nome}, do cadastro.`;
+    } else {
+      genderHint = `${nome} é ${GENDER_WORD[custKey]} no cadastro — <button type="button" class="link-btn" id="gf-reset">usar esse gênero</button>.`;
+    }
+  }
 
   app.innerHTML = `
     <header class="appbar">
@@ -190,21 +237,14 @@ export function renderMsg() {
       <div class="field">
         <label>Template</label>
         ${genderFilter}
+        ${genderHint ? `<div class="hint-inline">${genderHint}</div>` : ''}
         <select id="tpl-sel">${options}</select>
         ${state.msgGender && !tpls.length ? '<div class="hint-inline">Nenhum template para esse gênero.</div>' : ''}
+        <div class="hint-inline">O gênero classifica o template e segue o cadastro do cliente — não precisa marcar de novo.</div>
       </div>
       <div class="field">
         <label>Título</label>
         <input id="tpl-title" type="text" value="${esc(cur.title)}" placeholder="Ex.: Boas-vindas" />
-      </div>
-      <div class="field">
-        <label>Gênero do destinatário</label>
-        <div class="seg-control gender-filter" id="tpl-gender">
-          ${GENDER_BUTTONS.map(b =>
-            `<button type="button" class="seg-btn${genderKey(cur.gender) === b.key ? ' sel' : ''}" data-tg="${b.gender}">${b.label}</button>`).join('')}
-        </div>
-        <div class="hint-inline">Sem marcar = gênero não definido.</div>
-        <div class="hint-inline hint-incl">${GENERO_OUTRO_NOTA}</div>
       </div>
       <div class="field">
         <label>Mensagem</label>
@@ -219,12 +259,20 @@ export function renderMsg() {
       </div>
     </div>`;
 
-  byId('btn-back').onclick = () => { state.view = 'list'; render(); };
+  byId('btn-back').onclick = () => {
+    if (!confirmDiscard(msgDirty())) return;
+    state.view = 'list';
+    render();
+  };
   byId('seg-pessoa').onclick = () => { state.msgDestMode = 'pessoa'; render(); };
   byId('seg-lista').onclick = () => { state.msgDestMode = 'lista'; render(); };
   document.querySelectorAll('.gender-filter [data-gf]').forEach(btn => {
     (btn as HTMLElement).onclick = () => applyGenderFilter((btn as HTMLElement).getAttribute('data-gf') as GenderKey);
   });
+  if (byId('gf-reset')) byId('gf-reset').onclick = () => {
+    const k = customerGenderKey(currentCustomer());
+    if (k && state.msgGender !== k) applyGenderFilter(k);
+  };
   if (mode === 'pessoa') {
     const afterContactChange = () => { syncMsgGenderFromCustomer(); render(); };
     byId('ct-open-picker').onclick = () => openCustomers(true);
@@ -235,16 +283,11 @@ export function renderMsg() {
   }
   byId('tpl-sel').onchange = (e: Event) => {
     const id = (e.target as HTMLSelectElement).value;
-    state.msg = toMsg(state.templates.find(x => String(x.id) === String(id)));
+    const t = state.templates.find(x => String(x.id) === String(id));
+    state.msg = toMsg(t);
+    if (!t) state.msg.gender = filterToTemplateGender();   // "Novo template" herda o gênero do filtro
     render();
   };
-  document.querySelectorAll('#tpl-gender [data-tg]').forEach(btn => {
-    (btn as HTMLElement).onclick = () => {
-      const g = (btn as HTMLElement).getAttribute('data-tg') as TemplateGender;
-      state.msg.gender = state.msg.gender === g ? null : g;   // tocar de novo no aceso = gênero não definido
-      render();
-    };
-  });
   byId('tpl-title').oninput = (e: Event) => { state.msg.title = (e.target as HTMLInputElement).value; };
   byId('tpl-body').oninput = (e: Event) => { state.msg.body = (e.target as HTMLTextAreaElement).value; };
   // Clickable shortcuts: insert the placeholder at the cursor position
@@ -360,6 +403,11 @@ function persistCustomLists() {
   saveSettingsRemote();
 }
 
+// Passo do fluxo de listas com alteração não salva — nome de lista nova ou membros
+// (que vão pro Neon via persistCustomLists). Menu e telas de envio não têm o que perder.
+// Consultado no dismiss do sheet (tocar fora) para confirmar antes de descartar.
+let listaDirty = false;
+
 // Substitui o conteúdo do sheet já aberto (em vez de abrir um novo por cima) — os passos
 // seguintes (menu → seleção → envio) reaproveitam o mesmo backdrop.
 function setSheetContent(html: string, wire?: () => void) {
@@ -428,9 +476,11 @@ function openListaSheet() {
     toast('Escreva ou escolha um template antes de montar a lista', 'err');
     return;
   }
-  openSheet(listaMenuHTML(), wireListaMenu);
+  listaDirty = false;
+  openSheet(listaMenuHTML(), wireListaMenu, () => confirmDiscard(listaDirty));
 }
 function renderListaMenu() {
+  listaDirty = false;
   setSheetContent(listaMenuHTML(), wireListaMenu);
 }
 
@@ -445,6 +495,9 @@ function renderCheckboxPicker(
   preSelecionados: Set<string>,
   labelConfirmar: (n: number) => string,
   onConfirmar: (escolhidos: Customer[]) => void,
+  // guarded: passo de criar/editar lista — mexer nos membros vira alteração pendente
+  // (confirma antes de descartar). No fluxo de envio não há o que perder.
+  guarded = false,
 ) {
   const candidatos = [...candidatosRaw].sort(byCustomerLabel);
   const selecionados = new Set(preSelecionados);
@@ -478,6 +531,7 @@ function renderCheckboxPicker(
       const box = row.querySelector('input') as HTMLInputElement;
       box.onchange = () => {
         if (box.checked) selecionados.add(id); else selecionados.delete(id);
+        if (guarded) listaDirty = true;
         atualizarToolbar();
       };
     });
@@ -488,6 +542,7 @@ function renderCheckboxPicker(
         if (marcarTudo) selecionados.add(id); else selecionados.delete(id);
       });
       document.querySelectorAll('#lista-rows [data-ctid] input').forEach((el) => { (el as HTMLInputElement).checked = marcarTudo; });
+      if (guarded) listaDirty = true;
       atualizarToolbar();
     };
     byId('lista-confirmar').onclick = () => {
@@ -498,6 +553,7 @@ function renderCheckboxPicker(
 }
 
 function renderListaSelecao(titulo: string, contatos: Customer[]) {
+  listaDirty = false;   // escolher destinatários de um envio não grava nada
   renderCheckboxPicker(
     titulo,
     contatos,
@@ -524,6 +580,7 @@ function openNovaListaSheet() {
   `, () => {
     const inp = byId('nl-nome') as HTMLInputElement;
     inp.focus();
+    inp.oninput = () => { listaDirty = !!inp.value.trim(); };
     byId('nl-cancelar').onclick = () => renderListaMenu();
     byId('nl-continuar').onclick = () => {
       const nome = inp.value.trim();
@@ -538,6 +595,7 @@ function openNovaListaSheet() {
           if (!escolhidos.length) { toast('Selecione ao menos um contato', 'err'); return; }
           saveNewList(nome, escolhidos.map((c) => c.id as string | number));
         },
+        true,
       );
     };
   });
@@ -564,10 +622,12 @@ function openEditarListaSheet(list: CustomList) {
       toast('Lista atualizada ✓', 'ok');
       renderListaMenu();
     },
+    true,
   );
 }
 
 function renderListaEnvio(contatos: Customer[], idx: number) {
+  listaDirty = false;   // já passou pela criação/edição; aqui é só disparar os envios
   if (idx >= contatos.length) {
     setSheetContent(`
       <h2>Envio concluído</h2>

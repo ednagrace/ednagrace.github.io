@@ -1,4 +1,4 @@
-import type { Report, Customer, CustomerEvent, PhotoMeta } from './types.js';
+import type { Report, Customer, CustomerEvent, CustomerDraft, PhotoMeta } from './types.js';
 import { API_BASE, apiUrl } from './env.js';
 import { LS } from './env.js';
 import { state, save, sessionValid } from './state.js';
@@ -58,6 +58,27 @@ export async function sendPhotoReport(
   const res = await fetch(apiUrl('/api/reports'), {
     method: 'POST', headers: authHeaders(),
     body: JSON.stringify({ photo: { imageBase64, mediaType } }),
+  });
+  if (res.status === 401) { refreshSession(); throw new Error('sessão expirada'); }
+  const data = await res.json();
+  if (!data.ok) {
+    const err: any = new Error(data.error || 'Erro ao ler a foto');
+    err.meta = data.meta || null;
+    throw err;
+  }
+  return { draft: data.draft || {}, meta: data.meta || null };
+}
+
+// Envia a foto de uma ficha/cadastro, o servidor lê com o Claude e devolve um
+// rascunho de cliente. NÃO grava nada — o app preenche o formulário de "Novo
+// cliente" para conferência. Mesma cota da foto do relatório.
+export async function sendCustomerPhoto(
+  imageBase64: string, mediaType: string,
+): Promise<{ draft: CustomerDraft; meta: PhotoMeta | null }> {
+  if (!API_BASE) throw new Error('API não configurada.');
+  const res = await fetch(apiUrl('/api/customers'), {
+    method: 'POST', headers: authHeaders(),
+    body: JSON.stringify({ customerPhoto: { imageBase64, mediaType } }),
   });
   if (res.status === 401) { refreshSession(); throw new Error('sessão expirada'); }
   const data = await res.json();

@@ -1,5 +1,5 @@
 import type { TemplateGender } from '../types.js';
-import { MONTHS, APP_VERSION, SUPORTE_WPP, GENERO_OUTRO_NOTA, INCLUSAO_NOTA } from '../constants.js';
+import { MONTHS, APP_VERSION, SUPORTE_WPP } from '../constants.js';
 import { ENVS, ALL_FIELDS } from '../constants.js';
 import { ENV, IS_STAGING, API_BASE, apiUrl } from '../env.js';
 import { switchEnv } from '../env.js';
@@ -8,7 +8,7 @@ import { LS } from '../env.js';
 import { render } from '../render.js';
 import { esc, byId, informed } from '../format.js';
 import { pad, parseISO, todayISO } from '../dateUtils.js';
-import { openSheet, closeSheet, toast, copyToClipboard } from '../ui.js';
+import { openSheet, closeSheet, toast, copyToClipboard, confirmDiscard } from '../ui.js';
 import { forceRefresh } from '../ui.js';
 import { isAdmin, logout, refreshSession } from '../auth.js';
 import { authHeaders, isOnline, saveSettingsRemote, getReport, reportsForView } from '../api.js';
@@ -78,7 +78,6 @@ export function openMenu() {
       <span>Sair<small>${esc(state.session.email || '')}</small></span>
     </button>
     <div class="status-line" id="cfg-status" style="margin-top:12px"></div>
-    <div class="incl-banner">${INCLUSAO_NOTA}</div>
     <div class="app-version">Relatório Diário · ${APP_VERSION}<br><b>Desenvolvido por JPANTUNES13</b></div>
   `, () => {
     byId('mi-config').onclick = () => { closeSheet(); openConfig(); };
@@ -123,6 +122,10 @@ const DOW_DISPLAY = [
   { i: 5, l: 'S' }, { i: 6, l: 'S' }, { i: 0, l: 'D' },
 ];
 
+// Alteração pendente em Configurações (não passou pelo "Salvar", que grava no Neon).
+// Reatribuída quando o sheet abre; consultada no dismiss por tocar fora.
+let configDirty: () => boolean = () => false;
+
 function openConfig() {
   const c = state.config;
   let dias = c.diasTrabalho.slice();
@@ -140,8 +143,6 @@ function openConfig() {
         ${([['masculino', '♂️ Homem'], ['feminino', '♀️ Mulher'], ['outro', '⚧️ Outro']] as const)
           .map(([g, l]) => `<button type="button" class="seg-btn${promGender === g ? ' sel' : ''}" data-g="${g}">${l}</button>`).join('')}
       </div>
-      <div class="status-line">Define a palavra "promotora / promotor / promotore" nos textos de mensagem (atalho <code>{cargo}</code>).</div>
-      <div class="status-line hint-incl">${GENERO_OUTRO_NOTA}</div>
     </div>
     <div class="field">
       <label>Loja</label>
@@ -202,6 +203,14 @@ function openConfig() {
     <button type="button" class="pdf-btn btn-wpp" id="c-suporte" style="margin-top:16px">💬 Falar no WhatsApp (suporte)</button>
   `, () => {
     byId('c-suporte').onclick = () => openSupportWhatsApp();
+
+    const val = (id: string) => (byId(id) as HTMLInputElement | null)?.value ?? '';
+    // chosenColor (definida abaixo) guarda a última cor válida; entra na assinatura.
+    const cfgSig = () => JSON.stringify([
+      val('c-prom'), val('c-loja'), val('c-metadia'), val('c-birth'),
+      promGender, JSON.stringify(dias), chosenColor,
+    ]);
+    let initialSig = '';   // capturada no fim deste onReady, quando os campos já existem
 
     document.querySelectorAll('#c-dow .dow-btn').forEach((b) => {
       (b as HTMLElement).onclick = () => {
@@ -286,7 +295,10 @@ function openConfig() {
       render();
       toast('Configurações salvas ✓', 'ok');
     };
-  });
+
+    initialSig = cfgSig();
+    configDirty = () => cfgSig() !== initialSig;
+  }, () => confirmDiscard(configDirty()));
 }
 
 /* ---------------- Exports ---------------- */

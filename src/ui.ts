@@ -10,12 +10,28 @@ export function toast(msg: string, kind?: string) {
   toastTimer = setTimeout(() => { el.hidden = true; }, 2600);
 }
 
+/* Confirmação de "sair sem salvar" nas telas de cadastro: o botão voltar (ou tocar
+   fora de um sheet) descarta o que foi digitado. Só pergunta quando há alteração
+   pendente (`dirty`); sem alteração, sai direto sem incomodar. Retorna true = pode sair. */
+export function confirmDiscard(dirty: boolean): boolean {
+  return !dirty || window.confirm(
+    'Você preencheu o formulário e ainda não salvou.\n\n' +
+    'Se voltar agora, o que você digitou será perdido. Voltar mesmo assim?'
+  );
+}
+
 /* ---------------- Bottom sheet ---------------- */
-export function openSheet(html: string, onReady?: () => void) {
+// onBeforeDismiss: chamado quando a pessoa toca fora do sheet para fechá-lo. Se
+// devolver false, o sheet fica aberto (ex.: formulário com dados não salvos).
+export function openSheet(html: string, onReady?: () => void, onBeforeDismiss?: () => boolean) {
   const bd = document.createElement('div');
   bd.className = 'sheet-backdrop';
   bd.innerHTML = `<div class="sheet">${html}</div>`;
-  bd.onclick = (e) => { if (e.target === bd) closeSheet(); };
+  bd.onclick = (e) => {
+    if (e.target !== bd) return;
+    if (onBeforeDismiss && !onBeforeDismiss()) return;
+    closeSheet();
+  };
   document.body.appendChild(bd);
   if (onReady) onReady();
 }

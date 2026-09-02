@@ -1,16 +1,22 @@
-import type { Customer } from '../types.js';
+import type { Customer, CustomerDraft, PhotoMeta } from '../types.js';
 import { state, sessionValid } from '../state.js';
-import { isOnline, pullCustomers, saveCustomer, deleteCustomer } from '../api.js';
-import { openSheet, closeSheet, toast } from '../ui.js';
+import { isOnline, pullCustomers, saveCustomer, deleteCustomer, aiPhotoMeta, sendCustomerPhoto, addCustomerEvent } from '../api.js';
+import { openSheet, closeSheet, toast, confirmDiscard } from '../ui.js';
 import { render } from '../render.js';
 import { esc, byId } from '../format.js';
-import { customerLabel, contactPickerAvailable, saveToDeviceContacts } from '../customers.js';
-import { GENERO_OUTRO_NOTA } from '../constants.js';
+import { todayISO } from '../dateUtils.js';
+import { customerLabel, contactPickerAvailable, saveToDeviceContacts, TIPOS_NOVA_NOTA, tipoDesc, tipoSelectHTML } from '../customers.js';
+import { downscalePhoto, wirePhotoPicker } from '../photo.js';
 
 /* ---------- Customer: pick from device address book + create/edit form ----------
    Sem seção de vínculo (era contato <-> cliente, duas entidades separadas) — agora é um
    formulário só, pros campos de agenda (nome/telefone/email/gênero) e de cadastro
-   (sequência/limite) do mesmo registro. */
+   (sequência/limite) do mesmo registro.
+
+   Também traz a leitura por foto (mesma IA/cota da foto do relatório): a promotora
+   tira foto de uma ficha/cadastro e os campos preenchem sozinhos; se a foto tiver
+   uma observação, a seção "Nota" abre já preenchida e vira o primeiro evento do
+   histórico ao salvar. */
 export async function pickFromDeviceContacts() {
   if (!contactPickerAvailable()) { toast('Seu navegador não permite ler a agenda', 'err'); return; }
   try {
@@ -34,8 +40,118 @@ export function openContactSheet(c: Customer | null, onSaved?: (c: Customer) => 
   const isNew = !cur.id;
   let gender = String(cur.gender || '');   // '' = não informar; muda pelos botões abaixo
 
+  // Assinatura do formulário para detectar edição pendente antes de descartar (voltar
+  // = tocar fora do sheet). Capturada logo depois que o sheet abre; comparada no dismiss.
+  let initialSig = '';
+  const formSig = () => {
+    const v = (id: string) => (byId(id) as HTMLInputElement | null)?.value ?? '';
+    return JSON.stringify([
+      v('ct-name'), v('ct-phone'), v('ct-email'), v('ct-seq'), v('ct-limite'),
+      gender, v('ct-nota-obs'),
+    ]);
+  };
+
+  // Estado local da leitura por foto (não usa state.photo — aquele é do formulário do relatório).
+  let photoMeta: PhotoMeta | null = null;
+  let photoBusy = false;
+  let photoErr = '';
+
+  function photoBarHTML(): string {
+    // Ambiente de teste + não-admin: a feature nem aparece.
+    if (photoMeta && !photoMeta.allowed) {
+      return '<div class="ph-hint">📸 Leitura por foto indisponível no ambiente de teste.</div>';
+    }
+    const u = photoMeta && photoMeta.usage;
+    const quotaOn = !photoMeta || photoMeta.quotaEnabled;
+    const blocked = !!u && quotaOn && !u.podeUsar;
+
+    let cota = '';
+    if (photoMeta && !quotaOn) {
+      cota = '<span class="ph-cota warn">Cota desligada (teste)</span>';
+    } else if (u) {
+      cota = blocked
+        ? '<span class="ph-cota warn">Limite de fotos atingido — a cota zera na segunda-feira</span>'
+        : `<span class="ph-cota">resta ${Math.max(0, u.limiteDia - u.dia)} hoje · ${Math.max(0, u.limiteSemana - u.semana)} na semana</span>`;
+    }
+
+    const acoes = photoBusy
+      ? `<button type="button" class="pdf-btn ph-btn" disabled>⏳ Lendo a foto…</button>`
+      : `<div class="ph-actions">
+           <button type="button" class="pdf-btn ph-btn" id="ct-photo-cam" ${blocked ? 'disabled' : ''}>📷 Tirar foto</button>
+           <button type="button" class="pdf-btn ph-btn" id="ct-photo-gallery" ${blocked ? 'disabled' : ''}>🖼️ Da galeria</button>
+         </div>`;
+
+    return `${acoes}<div class="ph-hint">${photoErr ? `<span class="warn">${esc(photoErr)}</span>` : cota}</div>`;
+  }
+
+  function refreshPhotoBar() {
+    const bar = byId('ct-photo-bar');
+    if (!bar) return;
+    bar.innerHTML = photoBarHTML();
+    wirePhotoPicker({
+      camBtnId: 'ct-photo-cam', galleryBtnId: 'ct-photo-gallery', fileId: 'ct-photo-file',
+      onPick: onPhotoPicked,
+    });
+  }
+
+  // Preenche só os campos que ainda estão vazios — não apaga o que a promotora já digitou.
+  function applyDraft(d: CustomerDraft) {
+    const setIfEmpty = (id: string, val?: string | number | null) => {
+      const el = byId(id) as HTMLInputElement;
+      if (el && !el.value.trim() && val != null && String(val) !== '') el.value = String(val);
+    };
+    setIfEmpty('ct-name', d.name);
+    setIfEmpty('ct-phone', d.phone);
+    setIfEmpty('ct-email', d.email);
+    setIfEmpty('ct-seq', d.sequencia);
+    setIfEmpty('ct-limite', d.limite);
+
+    if (d.gender && !gender && ['masculino', 'feminino', 'outro'].includes(d.gender)) {
+      gender = d.gender;
+      document.querySelectorAll('#ct-gender .seg-btn').forEach((x) => x.classList.remove('sel'));
+      const btn = document.querySelector(`#ct-gender .seg-btn[data-g="${gender}"]`);
+      if (btn) btn.classList.add('sel');
+    }
+
+    if (d.nota && d.nota.trim()) {
+      const box = byId('ct-nota-box') as HTMLDetailsElement | null;
+      if (box) box.open = true;
+      const obs = byId('ct-nota-obs') as HTMLTextAreaElement | null;
+      if (obs && !obs.value.trim()) obs.value = d.nota.trim();
+      const sel = byId('ct-nota-tipo') as HTMLSelectElement | null;
+      if (sel && d.notaTipo && [...sel.options].some((o) => o.value === d.notaTipo)) {
+        sel.value = d.notaTipo;
+        byId('ct-nota-desc').textContent = tipoDesc(sel.value);
+      }
+    }
+  }
+
+  async function onPhotoPicked(f: File) {
+    if (photoBusy) return;
+    if (!isOnline() || !sessionValid()) { toast('Conecte à internet para ler a foto', 'err'); return; }
+    photoBusy = true; photoErr = '';
+    refreshPhotoBar();
+    try {
+      const base64 = await downscalePhoto(f);
+      if (!base64) throw new Error('não consegui abrir essa imagem');
+      const { draft, meta } = await sendCustomerPhoto(base64, 'image/jpeg');
+      if (meta) photoMeta = meta;
+      photoBusy = false;
+      refreshPhotoBar();
+      applyDraft(draft);
+      toast('Confira os dados lidos da foto ✍️', 'ok');
+    } catch (err: any) {
+      photoBusy = false;
+      if (err && err.meta) photoMeta = err.meta;
+      photoErr = (err && err.message) || 'não consegui ler a foto';
+      refreshPhotoBar();
+    }
+  }
+
   openSheet(`
     <h2>${isNew ? 'Novo cliente' : 'Editar cliente'}</h2>
+    <div id="ct-photo-bar" class="photo-bar">${photoBarHTML()}</div>
+    <input type="file" id="ct-photo-file" accept="image/*" hidden />
     <div class="field">
       <label>Nome (opcional)</label>
       <input id="ct-name" type="text" value="${esc(cur.name || '')}" placeholder="Ex.: Maria Silva" />
@@ -54,8 +170,6 @@ export function openContactSheet(c: Customer | null, onSaved?: (c: Customer) => 
         ${([['masculino', '♂️ Homem'], ['feminino', '♀️ Mulher'], ['outro', '⚧️ Outro']] as const)
           .map(([g, l]) => `<button type="button" class="seg-btn${gender === g ? ' sel' : ''}" data-g="${g}">${l}</button>`).join('')}
       </div>
-      <div class="status-line">Sem marcar = não informar. Define a concordância nas mensagens (atalho <code>{oae}</code>: querido / querida / queride).</div>
-      <div class="status-line hint-incl">${GENERO_OUTRO_NOTA}</div>
     </div>
     <div class="field">
       <label>Sequência (opcional)</label>
@@ -67,6 +181,18 @@ export function openContactSheet(c: Customer | null, onSaved?: (c: Customer) => 
         value="${cur.limite != null && cur.limite !== '' ? esc(String(cur.limite)) : ''}"
         placeholder="Ex.: 500" />
     </div>
+    <details class="nota-box" id="ct-nota-box">
+      <summary>🗒️ Adicionar nota (opcional)</summary>
+      <div class="field" style="margin-top:12px">
+        <label>Tipo</label>
+        ${tipoSelectHTML('ct-nota-tipo')}
+        <div class="status-line" id="ct-nota-desc">${esc(tipoDesc(TIPOS_NOVA_NOTA[0].value))}</div>
+      </div>
+      <div class="field">
+        <label>Observação</label>
+        <textarea id="ct-nota-obs" placeholder="Ex.: cliente pediu para retornar em outubro"></textarea>
+      </div>
+    </details>
     <label class="check-row">
       <input type="checkbox" id="ct-agenda-save" />
       <span>Salvar também na agenda do celular
@@ -86,6 +212,13 @@ export function openContactSheet(c: Customer | null, onSaved?: (c: Customer) => 
         if (gender) b.classList.add('sel');
       };
     });
+
+    const notaTipo = byId('ct-nota-tipo') as HTMLSelectElement;
+    if (notaTipo) notaTipo.onchange = () => { byId('ct-nota-desc').textContent = tipoDesc(notaTipo.value); };
+
+    refreshPhotoBar();
+    aiPhotoMeta().then((m) => { if (byId('ct-photo-bar')) { photoMeta = m; refreshPhotoBar(); } });
+
     byId('ct-save').onclick = async () => {
       const dados: any = {
         id: cur.id || undefined,
@@ -110,6 +243,10 @@ export function openContactSheet(c: Customer | null, onSaved?: (c: Customer) => 
       // Uses the form data — no need to wait for the database.
       if (alsoSaveToAddressBook) saveToDeviceContacts(dados);
 
+      // Read the note fields before saving (closeSheet later wipes the DOM).
+      const notaObs = (byId('ct-nota-obs') as HTMLTextAreaElement | null)?.value.trim() || '';
+      const notaTipoVal = (byId('ct-nota-tipo') as HTMLSelectElement | null)?.value || 'nota-geral';
+
       const btn = byId('ct-save') as HTMLButtonElement;
       btn.disabled = true;
       const r = await saveCustomer(dados);
@@ -119,11 +256,26 @@ export function openContactSheet(c: Customer | null, onSaved?: (c: Customer) => 
         byId('ct-status').style.color = '#d10a11';
         return;
       }
+
+      // Nota opcional → primeiro evento do histórico (precisa do id do cliente já salvo).
+      let notaOk = true;
+      if (notaObs && r.customer.id != null) {
+        const ev = await addCustomerEvent({
+          customerId: r.customer.id, tipo: notaTipoVal, observacao: notaObs,
+          dataEvento: todayISO(), loja: state.config.loja,
+        });
+        notaOk = ev.ok;
+      }
+
       await pullCustomers();
       state.customerId = r.customer.id ?? null;
       closeSheet();
       render();
-      if (!alsoSaveToAddressBook) toast('Cliente salvo ✓', 'ok');
+      if (!notaOk) {
+        toast('Cliente salvo — a nota falhou, adicione pela tela do cliente', 'err');
+      } else if (!alsoSaveToAddressBook) {
+        toast(notaObs ? 'Cliente e nota salvos ✓' : 'Cliente salvo ✓', 'ok');
+      }
       if (onSaved) onSaved(r.customer);
     };
     if (byId('ct-del')) byId('ct-del').onclick = async () => {
@@ -137,5 +289,7 @@ export function openContactSheet(c: Customer | null, onSaved?: (c: Customer) => 
       render();
       toast('Cliente excluído', 'ok');
     };
-  });
+
+    initialSig = formSig();
+  }, () => confirmDiscard(formSig() !== initialSig));
 }

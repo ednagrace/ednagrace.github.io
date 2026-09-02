@@ -53,6 +53,20 @@ export interface Customer {
   ultimoEvento?: CustomerEvent | null;
 }
 
+// Rascunho de cliente lido de uma foto (ficha/cadastro/anotação) pelo Claude —
+// vem do back-end (POST /api/customers { customerPhoto }). Não persiste: o app
+// preenche o formulário de "Novo cliente" para a promotora conferir e salvar.
+export interface CustomerDraft {
+  name?: string;
+  phone?: string;
+  email?: string;
+  sequencia?: string;
+  limite?: number | null;
+  gender?: '' | 'masculino' | 'feminino' | 'outro';
+  nota?: string;
+  notaTipo?: string;
+}
+
 // 'outro' = mensagem escrita para pessoas LGBTQIA+ (valor explícito, escolhido pela usuária).
 // null / ausente = gênero não definido (a usuária não marcou nada).
 // São estados distintos; só o filtro "Outro" junta os dois (em grupos separados).
@@ -155,6 +169,7 @@ export interface AppState {
   msgDestMode: 'pessoa' | 'lista';
   // Tela de Mensagens: filtro do seletor de templates pelo atributo `gender` do template
   // (feminino → 'f', masculino → 'm', outro → 'o'). '' = sem filtro. Só de tela, não persiste.
+  // Também é a classificação usada ao salvar um template — vem do cadastro do cliente.
   msgGender: '' | 'f' | 'm' | 'o';
   customerId: string | number | null;
   imp: ImportState;

@@ -8,14 +8,20 @@ import { esc, byId, informed, haptic, numOrNull } from '../format.js';
 import { metaFor, metaDiaVal } from '../aggregations.js';
 import { isOnline, getReport, enqueue, upsertCache, apiSave, deleteReportByDate } from '../api.js';
 import { aiPhotoMeta, sendPhotoReport, setAiQuota } from '../api.js';
+import { downscalePhoto, wirePhotoPicker } from '../photo.js';
 import { sharePDF } from '../pdf.js';
-import { toast } from '../ui.js';
+import { toast, confirmDiscard } from '../ui.js';
 
 /* ---------------- SCREEN: REPORT FORM ---------------- */
+// Snapshot of the report as it was when the form opened, so "Voltar"/"Cancelar" can
+// tell whether anything was typed before asking to discard it.
+let editSnapshot = '';
+
 export function openForm(dataISO: string) {
   const existing = getReport(dataISO);
   state.editing = existing || blankReport(dataISO);
   state.editingNew = !existing;
+  editSnapshot = JSON.stringify(state.editing);
   state.view = 'form';
   resetPhoto();
   render();
@@ -26,10 +32,34 @@ export function openForm(dataISO: string) {
 export function openNew() {
   state.editing = blankReport(todayISO());
   state.editingNew = true;
+  editSnapshot = JSON.stringify(state.editing);
   state.view = 'form';
   resetPhoto();
   render();
   window.scrollTo(0, 0);
+}
+
+// True while the form holds something that isn't on the server yet: a brand-new
+// report, or edits to an existing one that haven't been saved.
+function formDirty(): boolean {
+  return JSON.stringify(state.editing) !== editSnapshot;
+}
+
+function leaveForm() {
+  if (!confirmDiscard(formDirty())) return;
+  state.view = 'list';
+  render();
+}
+
+// The PDF is built from what's on screen, so it only makes sense once that has
+// been saved. Until then the button stays disabled with a hint.
+function refreshPdfBtn() {
+  const btn = byId('btn-pdf') as HTMLButtonElement | null;
+  if (!btn) return;
+  const locked = state.editingNew || formDirty();
+  btn.disabled = locked;
+  const hint = byId('pdf-hint');
+  if (hint) hint.hidden = !locked;
 }
 
 /* ---------- "Preencher com uma foto" (leitura por IA, dentro do form) ----------
@@ -96,19 +126,10 @@ function refreshPhotoBar() {
 }
 
 function wirePhotoBar() {
-  const file = byId('photo-file') as HTMLInputElement | null;
-  const cam = byId('btn-photo-cam');
-  const gallery = byId('btn-photo-gallery');
-  // `capture` liga a câmera; sem ele, abre a galeria/arquivos. Trocado na hora do clique.
-  const open = (useCamera: boolean) => {
-    if (!file) return;
-    if (useCamera) file.setAttribute('capture', 'environment');
-    else file.removeAttribute('capture');
-    file.click();
-  };
-  if (cam) cam.onclick = () => open(true);
-  if (gallery) gallery.onclick = () => open(false);
-  if (file) file.onchange = onPhotoPicked;
+  wirePhotoPicker({
+    camBtnId: 'btn-photo-cam', galleryBtnId: 'btn-photo-gallery', fileId: 'photo-file',
+    onPick: onPhotoPicked,
+  });
   const tog = byId('ph-toggle');
   if (tog) tog.onclick = onToggleQuota;
 }
@@ -128,30 +149,7 @@ async function onToggleQuota() {
   refreshPhotoBar();
 }
 
-// Reduz a imagem antes de enviar: upload menor, resposta mais rápida/barata e sem
-// esbarrar no limite de tamanho da função serverless. 'from-image' respeita a
-// orientação EXIF (foto deitada não vira de lado).
-async function downscalePhoto(
-  file: File, maxDim = 1568, quality = 0.82,
-): Promise<string> {
-  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
-  const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
-  const w = Math.max(1, Math.round(bmp.width * scale));
-  const h = Math.max(1, Math.round(bmp.height * scale));
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
-  ctx.drawImage(bmp, 0, 0, w, h);
-  bmp.close();
-  return canvas.toDataURL('image/jpeg', quality).split(',')[1] || '';
-}
-
-async function onPhotoPicked(e: Event) {
-  const input = e.target as HTMLInputElement;
-  const f = input.files && input.files[0];
-  input.value = '';   // allows re-picking the same file later
-  if (!f) return;
+async function onPhotoPicked(f: File) {
   const p = state.photo;
   if (p.busy) return;
   if (!isOnline()) { toast('Conecte à internet para ler a foto', 'err'); return; }
@@ -251,6 +249,7 @@ export function renderForm() {
       </div>
 
       <button type="button" class="pdf-btn" id="btn-pdf">📄 Gerar PDF para WhatsApp</button>
+      <div class="pdf-hint" id="pdf-hint" hidden>Salve o relatório primeiro</div>
     </div>
 
     <div class="savebar">
@@ -261,15 +260,16 @@ export function renderForm() {
 
   // eventos gerais
   wirePhotoBar();
-  byId('btn-back').onclick = byId('btn-cancel').onclick = () => { state.view = 'list'; render(); };
-  byId('f-data').onchange = (e: Event) => { r.data = (e.target as HTMLInputElement).value; };
-  byId('f-obs').oninput = (e: Event) => { r.obs = (e.target as HTMLTextAreaElement).value; };
+  byId('btn-back').onclick = byId('btn-cancel').onclick = leaveForm;
+  byId('f-data').onchange = (e: Event) => { r.data = (e.target as HTMLInputElement).value; refreshPdfBtn(); };
+  byId('f-obs').oninput = (e: Event) => { r.obs = (e.target as HTMLTextAreaElement).value; refreshPdfBtn(); };
   byId('btn-save').onclick = onSave;
   byId('btn-pdf').onclick = () => sharePDF(Object.assign({}, r));
   if (byId('btn-del')) byId('btn-del').onclick = onDelete;
 
   // liga os contadores
   ALL_FIELDS.forEach(f => wireCounter(f, r));
+  refreshPdfBtn();
 }
 
 async function onDelete() {
@@ -353,6 +353,7 @@ function wireCounter(f: Field, r: Report) {
       if (dh) { dh.textContent = dailyHintText(v); dh.classList.toggle('hit', informed(v) && (v as number) >= metaDiaVal()); }
     }
     if (PROPOSTAS_KEYS.includes(f.key)) updatePropostasBadge(r);
+    refreshPdfBtn();
   }
   // n === null => N/A; a number => that value. Also writes the input (buttons/steppers use this).
   function set(n: number | null) {
@@ -421,8 +422,12 @@ async function onSave() {
     } catch (e) { sent = false; }
   }
 
-  state.view = 'list';
+  // Stay on the form after saving — the promotora may still want to generate the
+  // PDF (now unlocked) before leaving via "Voltar". It's a saved report now, so
+  // drop "novo" and refresh the snapshot so nothing reads as unsaved.
+  state.editingNew = false;
   state.month = monthKeyOf(r.data);
+  editSnapshot = JSON.stringify(state.editing);
   render();
   toast(sent ? 'Relatório salvo no servidor ✓'
              : 'Salvo no celular — envia quando tiver internet ⏳',
