@@ -29,6 +29,12 @@ export function openCustomers(pickMode?: boolean) {
   pullCustomers().then(() => { if (state.view === 'customers') renderCustomersSoft(); });
 }
 
+// In pick mode the screen was opened from Mensagens, so back returns there.
+export function customersBack() {
+  state.view = state.customersPickMode ? 'msg' : 'list';
+  render();
+}
+
 export function renderCustomers() {
   const pick = state.customersPickMode;
   app.innerHTML = `
@@ -52,7 +58,7 @@ export function renderCustomers() {
     </div>
     <button class="fab" id="fab-novo-cliente"><span class="plus">＋</span> Novo cliente</button>
   `;
-  byId('btn-back').onclick = () => { state.view = pick ? 'msg' : 'list'; render(); };
+  byId('btn-back').onclick = customersBack;
   byId('fab-novo-cliente').onclick = () => openContactSheet(null);
   const s = byId('cu-search') as HTMLInputElement;
   s.oninput = () => { state.customersSearch = s.value; renderCustomersSoft(); };

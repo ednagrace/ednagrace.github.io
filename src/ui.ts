@@ -21,8 +21,14 @@ export function confirmDiscard(dirty: boolean): boolean {
 }
 
 /* ---------------- Bottom sheet ---------------- */
-// onBeforeDismiss: chamado quando a pessoa toca fora do sheet para fechá-lo. Se
-// devolver false, o sheet fica aberto (ex.: formulário com dados não salvos).
+// Open sheets, oldest first. Tracked so the hardware "back" button (see nav.ts)
+// can close the topmost one, honoring its dismiss guard.
+interface SheetEntry { el: HTMLElement; onBeforeDismiss?: () => boolean; }
+const openSheets: SheetEntry[] = [];
+
+// onBeforeDismiss: chamado quando a pessoa toca fora do sheet (ou usa o botão
+// voltar do celular) para fechá-lo. Se devolver false, o sheet fica aberto
+// (ex.: formulário com dados não salvos).
 export function openSheet(html: string, onReady?: () => void, onBeforeDismiss?: () => boolean) {
   const bd = document.createElement('div');
   bd.className = 'sheet-backdrop';
@@ -33,11 +39,25 @@ export function openSheet(html: string, onReady?: () => void, onBeforeDismiss?: 
     closeSheet();
   };
   document.body.appendChild(bd);
+  openSheets.push({ el: bd, onBeforeDismiss });
   if (onReady) onReady();
 }
 export function closeSheet() {
-  const bd = document.querySelector('.sheet-backdrop');
+  const entry = openSheets.pop();
+  if (entry) { entry.el.remove(); return; }
+  const bd = document.querySelector('.sheet-backdrop');   // fallback: stray backdrop
   if (bd) bd.remove();
+}
+
+/* Hardware/browser back button: close the topmost sheet, honoring its "discard
+   unsaved?" guard. Returns true when a sheet was open — whether or not it
+   actually closed — so the caller knows the back press was consumed here. */
+export function dismissTopSheet(): boolean {
+  const entry = openSheets[openSheets.length - 1];
+  if (!entry) return false;
+  if (entry.onBeforeDismiss && !entry.onBeforeDismiss()) return true;
+  closeSheet();
+  return true;
 }
 
 export async function copyToClipboard(text: string): Promise<boolean> {

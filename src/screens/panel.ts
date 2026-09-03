@@ -8,6 +8,7 @@ import { shareMonthPDF } from '../pdf.js';
 import { shiftMonth } from './list.js';
 
 export function openPanel() { state.view = 'panel'; render(); window.scrollTo(0, 0); }
+export function panelBack() { state.view = 'list'; render(); }
 
 // Donut chart in SVG (no library). segs = [{label, value, color}].
 function donutSVG(segs: { label: string; value: number; color: string }[], total: number): string {
@@ -119,7 +120,7 @@ export function renderPanel() {
       <button type="button" class="pdf-btn btn-wpp" id="btn-month-txt">💬 Enviar texto no WhatsApp</button>
     </div>`;
 
-  byId('btn-back').onclick = () => { state.view = 'list'; render(); };
+  byId('btn-back').onclick = panelBack;
   byId('prev-month').onclick = () => shiftMonth(-1);
   byId('next-month').onclick = () => shiftMonth(1);
   byId('btn-month-pdf').onclick = () => shareMonthPDF(monthKey);

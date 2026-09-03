@@ -15,6 +15,15 @@ export function openImport() {
   window.scrollTo(0, 0);
 }
 
+// "Voltar" (screen button and the phone's back button).
+export function importBack() {
+  const imp = state.imp || {};
+  const dirty = !!(imp.file || (imp.sheetUrl || '').trim() || imp.preview);
+  if (!confirmDiscard(dirty)) return;
+  state.view = 'list';
+  render();
+}
+
 export function renderImport() {
   const imp = state.imp || {};
   const p = imp.preview;
@@ -68,13 +77,7 @@ export function renderImport() {
       ${previewHTML}
     </div>`;
 
-  byId('btn-back').onclick = () => {
-    const imp = state.imp || {};
-    const dirty = !!(imp.file || (imp.sheetUrl || '').trim() || imp.preview);
-    if (!confirmDiscard(dirty)) return;
-    state.view = 'list';
-    render();
-  };
+  byId('btn-back').onclick = importBack;
   byId('imp-modelo').onclick = downloadTemplateFile;
   byId('imp-gsheet').onclick = createGoogleSheet;
   byId('imp-input').onchange = (e: Event) => {

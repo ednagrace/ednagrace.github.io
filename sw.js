@@ -2,21 +2,22 @@
    Estratégia: CACHE PRIMEIRO (rápido para a promotora) + revalidação em segundo plano.
    Quando uma versão nova é detectada, ela ativa na hora e a página recarrega sozinha.
    Troque a versão a cada atualização. */
-const CACHE = 'edna-relatorio-v72';
+const CACHE = 'edna-relatorio-v73';
 // URLs VERSIONADAS: uma versão nova muda a URL, então o navegador é obrigado a
 // baixar de novo — não tem como o cache HTTP (max-age=600 do GitHub Pages) servir
 // o arquivo velho. Use ./bump.sh <n> para trocar a versão em todos os lugares.
 const ASSETS = [
   './',
   './index.html',
-  './styles.css?v=72',
-  './build/main.js?v=72',
+  './styles.css?v=73',
+  './build/main.js?v=73',
   './build/state.js',
   './build/env.js',
   './build/constants.js',
   './build/dateUtils.js',
   './build/format.js',
   './build/ui.js',
+  './build/nav.js',
   './build/theme.js',
   './build/aggregations.js',
   './build/contacts.js',

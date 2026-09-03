@@ -6,6 +6,7 @@ import { state, sessionValid } from './state.js';
 import { showTestBanner, checkEnvironment } from './env.js';
 import { applyHeaderColor } from './theme.js';
 import { render } from './render.js';
+import { initNav } from './nav.js';
 import { syncNow, postAuthInit } from './api.js';
 import { quickCols } from './screens/form.js';
 import { showLogin } from './screens/login.js';
@@ -29,6 +30,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) sync
 
 /* ---------------- Boot ---------------- */
 function boot() {
+  initNav();             // hardware "back" navigates inside the app, doesn't exit the PWA
   showTestBanner();      // amber banner if we're in the test environment
   applyHeaderColor();    // header color (production) or amber (staging)
   checkEnvironment();    // and the API confirms (or denies) which environment this is

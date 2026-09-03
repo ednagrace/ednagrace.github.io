@@ -45,7 +45,8 @@ function formDirty(): boolean {
   return JSON.stringify(state.editing) !== editSnapshot;
 }
 
-function leaveForm() {
+// "Voltar"/"Cancelar" and the phone's back button all land here.
+export function formBack() {
   if (!confirmDiscard(formDirty())) return;
   state.view = 'list';
   render();
@@ -260,7 +261,7 @@ export function renderForm() {
 
   // eventos gerais
   wirePhotoBar();
-  byId('btn-back').onclick = byId('btn-cancel').onclick = leaveForm;
+  byId('btn-back').onclick = byId('btn-cancel').onclick = formBack;
   byId('f-data').onchange = (e: Event) => { r.data = (e.target as HTMLInputElement).value; refreshPdfBtn(); };
   byId('f-obs').oninput = (e: Event) => { r.obs = (e.target as HTMLTextAreaElement).value; refreshPdfBtn(); };
   byId('btn-save').onclick = onSave;

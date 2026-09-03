@@ -50,6 +50,13 @@ function msgDirty(): boolean {
   return base.title !== state.msg.title || base.body !== state.msg.body || base.gender !== state.msg.gender;
 }
 
+// "Voltar" (screen button and the phone's back button).
+export function msgBack() {
+  if (!confirmDiscard(msgDirty())) return;
+  state.view = 'list';
+  render();
+}
+
 /* ---------------- Filtro do seletor de templates por gênero ----------------
    `gender` no Neon: 'feminino' | 'masculino' | 'outro' (mensagem escrita para pessoas
    LGBTQIA+) | NULL (gênero não definido). São 4 estados distintos.
@@ -259,11 +266,7 @@ export function renderMsg() {
       </div>
     </div>`;
 
-  byId('btn-back').onclick = () => {
-    if (!confirmDiscard(msgDirty())) return;
-    state.view = 'list';
-    render();
-  };
+  byId('btn-back').onclick = msgBack;
   byId('seg-pessoa').onclick = () => { state.msgDestMode = 'pessoa'; render(); };
   byId('seg-lista').onclick = () => { state.msgDestMode = 'lista'; render(); };
   document.querySelectorAll('.gender-filter [data-gf]').forEach(btn => {
