@@ -5,7 +5,7 @@ import { pad } from '../dateUtils.js';
 import { esc, byId } from '../format.js';
 import { isOnline, pullCustomers, pullTemplates, authHeaders, saveSettingsRemote } from '../api.js';
 import { apiUrl, LS } from '../env.js';
-import { CARTAO_QUICK_BODY } from '../constants.js';
+import { CARTAO_QUICK_BODY, GENERO_OUTRO_NOTA } from '../constants.js';
 import { refreshSession } from '../auth.js';
 import { toast, openSheet, closeSheet, confirmDiscard } from '../ui.js';
 import { currentCustomer, customerLabel, phoneDigits, contactPickerAvailable } from '../customers.js';
@@ -198,8 +198,15 @@ export function renderMsg() {
     </div>`;
 
   const tpls = filteredTemplates();
-  const optEl = (t: Template) =>
-    `<option value="${t.id}"${String(t.id) === String(cur.id) ? ' selected' : ''}>${esc(t.title)}</option>`;
+  // Sem filtro de gênero ativo, o mesmo título pode existir em mais de um gênero — um
+  // marcador (♂️/♀️/⚧️) desambigua sem sujar o título salvo. Com um filtro de gênero ativo
+  // todos os itens já têm o mesmo gênero, então o marcador é dispensável.
+  const genderMark: Record<GenderKey, string> = { m: '♂️ ', f: '♀️ ', o: '⚧️ ' };
+  const optEl = (t: Template) => {
+    const gk = genderKey(t.gender);
+    const mark = !state.msgGender && gk ? genderMark[gk] : '';
+    return `<option value="${t.id}"${String(t.id) === String(cur.id) ? ' selected' : ''}>${mark}${esc(t.title)}</option>`;
+  };
   const novoOpt = '<option value="">— Novo template —</option>';
   let options: string;
   if (state.msgGender === 'o') {
@@ -254,6 +261,7 @@ export function renderMsg() {
         <select id="tpl-sel">${options}</select>
         ${state.msgGender && !tpls.length ? '<div class="hint-inline">Nenhum template para esse gênero.</div>' : ''}
         <div class="hint-inline">O gênero classifica o template e segue o cadastro do cliente — não precisa marcar de novo.</div>
+        <div class="hint-inline hint-incl">${GENERO_OUTRO_NOTA}</div>
       </div>
       <div class="field">
         <label>Título</label>

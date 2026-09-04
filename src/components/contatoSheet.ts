@@ -7,6 +7,7 @@ import { esc, byId } from '../format.js';
 import { todayISO } from '../dateUtils.js';
 import { customerLabel, contactPickerAvailable, saveToDeviceContacts, TIPOS_NOVA_NOTA, tipoDesc, tipoSelectHTML } from '../customers.js';
 import { downscalePhoto, wirePhotoPicker } from '../photo.js';
+import { GENERO_OUTRO_NOTA } from '../constants.js';
 
 /* ---------- Customer: pick from device address book + create/edit form ----------
    Sem seção de vínculo (era contato <-> cliente, duas entidades separadas) — agora é um
@@ -170,6 +171,7 @@ export function openContactSheet(c: Customer | null, onSaved?: (c: Customer) => 
         ${([['masculino', '♂️ Homem'], ['feminino', '♀️ Mulher'], ['outro', '⚧️ Outro']] as const)
           .map(([g, l]) => `<button type="button" class="seg-btn${gender === g ? ' sel' : ''}" data-g="${g}">${l}</button>`).join('')}
       </div>
+      <div class="status-line hint-incl">${GENERO_OUTRO_NOTA}</div>
     </div>
     <div class="field">
       <label>Sequência (opcional)</label>

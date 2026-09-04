@@ -69,8 +69,15 @@ export const ALLOWLIST = [
 ];
 
 export const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-export const APP_VERSION = 'v73'; // bump together with sw.js's CACHE on every release
+export const APP_VERSION = 'v74'; // bump together with sw.js's CACHE on every release
 export const ADMIN_EMAIL = 'jpantunesdesouza@gmail.com';
+
+// Textos de inclusão — aparecem junto dos campos de gênero e no rodapé / login.
+// O app é para todo mundo; "Outro" deve soar acolhedor, não como sobra.
+export const GENERO_OUTRO_NOTA =
+  '"Outro" contempla pessoas não-binárias e toda a comunidade LGBTQIA+ — aqui cada pessoa é tratada com respeito.';
+export const INCLUSAO_NOTA =
+  'Feito para todas as pessoas, sem distinção de gênero, orientação sexual ou identidade. 🏳️‍🌈';
 
 export const DEFAULT_META = 22; // default monthly goal for approved proposals (editable)
 export const DEFAULT_META_PJ = 10; // default monthly goal for approved PJ cards (editable per month)

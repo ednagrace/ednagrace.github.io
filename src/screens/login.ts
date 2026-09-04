@@ -1,4 +1,4 @@
-import { APP_VERSION } from '../constants.js';
+import { APP_VERSION, INCLUSAO_NOTA } from '../constants.js';
 import { state } from '../state.js';
 import { app } from '../render.js';
 import { esc, byId } from '../format.js';
@@ -16,6 +16,7 @@ export function showLogin() {
         <p class="auth-sub">${esc(state.config.promotora)} · ${esc(state.config.loja)}</p>
         <div id="gbtn" class="gbtn-wrap"></div>
         <p class="auth-note">Entre com a conta Google autorizada.<br>Você só faz isso uma vez.</p>
+        <p class="incl-banner">${INCLUSAO_NOTA}</p>
         <div class="app-version">${APP_VERSION}<br><b>Desenvolvido por JPANTUNES13</b></div>
       </div>
     </div>`;
