@@ -1,6 +1,6 @@
 import { XLSX_MIME } from '../constants.js';
 import { state, sessionValid } from '../state.js';
-import { app, render } from '../render.js';
+import { app, render, goHome } from '../render.js';
 import { esc, byId } from '../format.js';
 import { isOnline, authHeaders, refreshFromCloud } from '../api.js';
 import { apiUrl } from '../env.js';
@@ -15,13 +15,22 @@ export function openImport() {
   window.scrollTo(0, 0);
 }
 
+// Any spreadsheet chosen / previewed but not yet imported?
+function impDirty(): boolean {
+  const imp = state.imp || {};
+  return !!(imp.file || (imp.sheetUrl || '').trim() || imp.preview);
+}
+
 // "Voltar" (screen button and the phone's back button).
 export function importBack() {
-  const imp = state.imp || {};
-  const dirty = !!(imp.file || (imp.sheetUrl || '').trim() || imp.preview);
-  if (!confirmDiscard(dirty)) return;
+  if (!confirmDiscard(impDirty())) return;
   state.view = 'list';
   render();
+}
+
+// HOME button / deep link: same "discard the spreadsheet you picked?" check.
+export function importCanLeave(): boolean {
+  return confirmDiscard(impDirty());
 }
 
 export function renderImport() {
@@ -47,6 +56,7 @@ export function renderImport() {
     <header class="appbar">
       <button class="iconbtn" id="btn-back" aria-label="Voltar">‹</button>
       <div style="flex:1"><h1>Importar planilha</h1><span class="sub">Criar relatórios em massa</span></div>
+      <button class="iconbtn" id="btn-home" aria-label="Início">🏠</button>
     </header>
     <div class="screen">
       <button type="button" class="btn-save" id="imp-gsheet" style="width:100%;height:54px">📗 Criar planilha no Google (editável)</button>
@@ -78,6 +88,7 @@ export function renderImport() {
     </div>`;
 
   byId('btn-back').onclick = importBack;
+  byId('btn-home').onclick = goHome;
   byId('imp-modelo').onclick = downloadTemplateFile;
   byId('imp-gsheet').onclick = createGoogleSheet;
   byId('imp-input').onchange = (e: Event) => {

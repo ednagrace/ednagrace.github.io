@@ -96,6 +96,8 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .meta-card .edit-meta { background: rgba(255,255,255,.18); border: none; color: #fff; font-size: 12px; padding: 6px 10px; border-radius: 999px; }
 .meta-card .meta-dia-line { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.22); display: flex; align-items: center; gap: 8px; }
 .meta-card .meta-dia-line b { font-size: 15px; }
+/* Segundo card de meta: cartão PJ (tom mais escuro pra distinguir do card principal). */
+.meta-card.meta-card-pj { background: linear-gradient(135deg, #3b4b66 0%, #1f2937 100%); margin-top: -4px; }
 
 /* indicador da meta do dia no contador (Aprovadas) */
 .daily-hint {
@@ -165,6 +167,7 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .chip.ok { background: var(--green-soft); color: var(--green); }
 .chip.no { background: var(--red-soft); color: var(--red-dark); }
 .chip.neutral { background: #eef0f3; color: #4b5563; }
+.chip.pj { background: #e5e9f2; color: #3b4b66; }
 .report-card .go { color: var(--muted); font-size: 22px; }
 .report-card .pend { position: absolute; }
 .sync-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-left: 6px; }
@@ -220,6 +223,18 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 }
 .ph-toggle b { color: var(--ink); }
 .ph-toggle:disabled { opacity: .5; }
+
+/* ---------- Abas do formulário (Comum / Cartão PJ) ---------- */
+.form-tabs {
+  display: flex; gap: 4px; margin-top: 18px; padding: 4px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow);
+}
+.form-tab {
+  flex: 1; height: 42px; border: none; border-radius: 10px; background: none;
+  color: var(--muted); font-size: 14px; font-weight: 700;
+}
+.form-tab.active { background: var(--red); color: #fff; }
+.form-tabs + [data-panel] .group:first-child { margin-top: 14px; }
 
 .group { margin-top: 18px; }
 .group > h2 {

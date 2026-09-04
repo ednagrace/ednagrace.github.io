@@ -1,9 +1,9 @@
 import type { Report } from './types.js';
-import { GROUPS, ALL_FIELDS, NUMERIC_KEYS, MONTHS } from './constants.js';
+import { GROUPS, ALL_FIELDS, ALL_NUMERIC_KEYS, MONTHS } from './constants.js';
 import { state } from './state.js';
 import { pad, parseISO, monthKeyOf, weekday } from './dateUtils.js';
-import { num, numOrNull } from './format.js';
-import { metaFor, metaDiaVal, aprovadasNoMes, monthTotals, weeklyBreakdown } from './aggregations.js';
+import { num, numOrNull, informed } from './format.js';
+import { metaFor, metaDiaVal, aprovadasNoMes, monthTotals, weeklyBreakdown, metaPJFor } from './aggregations.js';
 import { toast } from './ui.js';
 
 /* ---------------- PDF generation (no external library) ---------------- */
@@ -136,6 +136,17 @@ function buildReportPDF(r: Report): Blob {
     y -= 8;
   });
 
+  // Cartão PJ — só quando o relatório tem algum número PJ. Reaproveita os ícones de
+  // aprovadas / em análise (PJ não tem ícone próprio).
+  if (informed(r.pjAprovadas) || informed(r.pjAnalise)) {
+    sectionTitle('Cartão PJ');
+    cardsGrid([
+      { label: 'PJ Aprovadas', value: num(r.pjAprovadas), key: 'aprovadas' as IconKey },
+      { label: 'PJ Em Análise', value: num(r.pjAnalise), key: 'analise' as IconKey },
+    ]);
+    y -= 8;
+  }
+
   // Goals — same card treatment, wider (2 cols) since the values are fraction-shaped.
   sectionTitle('Metas');
   const md = metaDiaVal();
@@ -143,15 +154,26 @@ function buildReportPDF(r: Report): Blob {
     { label: 'Meta do dia', value: num(r.aprovadas) + ' / ' + md + (num(r.aprovadas) >= md ? ' (bateu)' : ''), color: PDF.GREEN },
     { label: 'Meta do mês', value: feitas + ' / ' + (meta || 0) + (meta ? ' (' + pct + '%)' : ''), color: PDF.RED },
   ];
-  const MCOLS = 2, MGAP = 8, MCARD_W = (515 - MGAP) / MCOLS, MCARD_H = 54;
-  metaCards.forEach((f, col) => {
+  if (state.config.metaPJAtiva) {
+    const metaPJ = metaPJFor(mk);
+    const feitasPJ = monthTotals(mk).pjAprovadas as number || 0;
+    metaCards.push({
+      label: 'Meta do mês · PJ',
+      value: feitasPJ + ' / ' + (metaPJ || 0) + (metaPJ ? ' (' + Math.round((feitasPJ / metaPJ) * 100) + '%)' : ''),
+      color: PDF.BLUE,
+    });
+  }
+  const MGAP = 8, MCARD_W = (515 - MGAP) / 2, MCARD_H = 54;
+  metaCards.forEach((f, i) => {
+    const col = i % 2, row = Math.floor(i / 2);
     const x = 40 + col * (MCARD_W + MGAP);
-    roundedRect(x, y - MCARD_H, MCARD_W, MCARD_H, 8, CARD_BG);
-    dot(x + 15, y - 14, 4, f.color);
-    txt(x + 12, y - 34, 16, F2, PDF.INK, String(f.value));
-    txt(x + 12, y - 47, 8.5, F1, PDF.MUTED, f.label.toUpperCase());
+    const cy = y - row * (MCARD_H + MGAP);
+    roundedRect(x, cy - MCARD_H, MCARD_W, MCARD_H, 8, CARD_BG);
+    dot(x + 15, cy - 14, 4, f.color);
+    txt(x + 12, cy - 34, 16, F2, PDF.INK, String(f.value));
+    txt(x + 12, cy - 47, 8.5, F1, PDF.MUTED, f.label.toUpperCase());
   });
-  y -= MCARD_H + 16;
+  y -= Math.ceil(metaCards.length / 2) * (MCARD_H + MGAP) + 8;
 
   // Notes (with simple line wrapping), on its own light card.
   if (r.obs && String(r.obs).trim()) {
@@ -219,7 +241,7 @@ function assemblePdf(c: string): Blob {
 
 export function sharePDF(r: Report | null) {
   if (!r || !r.data) { toast('Nenhum relatório para gerar PDF', 'err'); return; }
-  NUMERIC_KEYS.forEach(k => (r as any)[k] = numOrNull((r as any)[k]));
+  ALL_NUMERIC_KEYS.forEach(k => (r as any)[k] = numOrNull((r as any)[k]));
   const blob = buildReportPDF(r);
   const primeiroNome = (r.promotora || 'Edna').split(' ')[0];
   const fname = 'Relatorio_' + r.data + '_' + primeiroNome + '.pdf';
@@ -361,6 +383,33 @@ function buildMonthPDF(monthKey: string): Blob {
       ly -= 23;
     });
     yy -= propCardH + 24;
+
+    // CARTÃO PJ — só quando a métrica está ligada. Dois cards (Aprovadas / Em Análise)
+    // mais a linha da meta PJ do mês.
+    if (state.config.metaPJAtiva) {
+      sectionTitle('Cartão PJ');
+      const metaPJ = metaPJFor(monthKey);
+      const feitasPJ = (t.pjAprovadas as number) || 0;
+      const pctPJ = metaPJ > 0 ? Math.round((feitasPJ / metaPJ) * 100) : 0;
+      const pjCards = [
+        { label: 'PJ Aprovadas', value: num(t.pjAprovadas), key: 'aprovadas' as IconKey },
+        { label: 'PJ Em Análise', value: num(t.pjAnalise), key: 'analise' as IconKey },
+      ];
+      const PJGAP = 6, PJ_W = (515 - PJGAP) / 2, PJ_H = 52;
+      pjCards.forEach((f, col) => {
+        const x = 40 + col * (PJ_W + PJGAP);
+        const fc = FIELD_COLOR[f.key] || PDF.RED;
+        roundedRect(x, yy - PJ_H, PJ_W, PJ_H, 8, CARD_BG);
+        roundedRect(x + 10, yy - 32, 22, 22, 6, tint(fc));
+        image(f.key, x + 14, yy - 28, 14, 14);
+        txt(x + 40, yy - 28, 19, F2, PDF.INK, String(f.value));
+        txt(x + 10, yy - 42, 8, F1, fc, f.label.toUpperCase());
+      });
+      yy -= PJ_H + 10;
+      txt(40, yy, 10, F1, PDF.MUTED,
+        'META PJ:  ' + feitasPJ + ' / ' + (metaPJ || 0) + (metaPJ ? '   (' + pctPJ + '%)' : ''));
+      yy -= 24;
+    }
 
     // TOTAIS DO MÊS — same rounded-card grid as the daily report PDF: icon on a pastel badge
     // of its own color, the number beside it (not stacked), label below in that same color.

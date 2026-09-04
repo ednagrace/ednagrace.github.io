@@ -204,7 +204,9 @@ export async function pullTemplates() {
 export function businessSettings() {
   return {
     metas: state.metas,
+    metasPJ: state.metasPJ,
     metaDia: Number(state.config.metaDia) || 3,
+    metaPJAtiva: !!state.config.metaPJAtiva,
     promotora: state.config.promotora,
     promotoraGender: state.config.promotoraGender || 'feminino',
     loja: state.config.loja,
@@ -239,7 +241,9 @@ export async function pullSettings() {
     if (data && data.ok && data.settings) {
       const s = data.settings;
       if (s.metas && typeof s.metas === 'object') { state.metas = Object.assign({}, s.metas); save(LS.metas, state.metas); }
+      if (s.metasPJ && typeof s.metasPJ === 'object') { state.metasPJ = Object.assign({}, s.metasPJ); save(LS.metasPJ, state.metasPJ); }
       if (typeof s.metaDia !== 'undefined') state.config.metaDia = Number(s.metaDia) || 0;
+      if (typeof s.metaPJAtiva !== 'undefined') state.config.metaPJAtiva = !!s.metaPJAtiva;
       if (s.promotora) state.config.promotora = s.promotora;
       if (['feminino', 'masculino', 'outro'].includes(s.promotoraGender)) state.config.promotoraGender = s.promotoraGender;
       if (s.loja) state.config.loja = s.loja;

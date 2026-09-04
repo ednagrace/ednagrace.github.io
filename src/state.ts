@@ -13,6 +13,7 @@ const defaultConfig: Config = {
   promotoraGender: 'feminino',  // Edna; muda em Configurações
   loja:     'Savegnago',
   metaDia:  3,                  // daily goal for approved cards (editable)
+  metaPJAtiva: false,          // acompanhar cartão PJ à parte (aba + meta mensal); liga nas Configurações
   headerColor: '',             // header color (production only); empty = brand red
   birthDate: '',               // 'YYYY-MM-DD' — promotora's date of birth
   // [dom, seg, ter, qua, qui, sex, sáb] — default for Edna: every day except Sunday and Wednesday.
@@ -24,6 +25,7 @@ export const state: AppState = {
   reports: load(LS.reports, []),        // local report cache
   queue:   load(LS.queue, []),          // reports waiting to be sent (offline)
   metas:   load(LS.metas, {}),          // { 'YYYY-MM': number }
+  metasPJ: load(LS.metasPJ, {}),        // { 'YYYY-MM': number } — meta mensal de cartão PJ
   session: load(LS.session, {}),        // { token, email, name, exp }
   templates: load(LS.templates, []),    // [{ id, title, body }]
   customers: load(LS.customers, []),    // cadastro unificado (Clientes screen + agenda WhatsApp)

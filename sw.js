@@ -18,6 +18,7 @@ const ASSETS = [
   './build/format.js',
   './build/ui.js',
   './build/nav.js',
+  './build/router.js',
   './build/theme.js',
   './build/aggregations.js',
   './build/contacts.js',

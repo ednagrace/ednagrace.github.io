@@ -102,6 +102,9 @@ export interface Config {
   promotoraGender: TemplateGender;
   loja: string;
   metaDia: number;
+  // Acompanhar cartão PJ à parte (aba própria no formulário + meta mensal). A promotora
+  // liga/desliga isso nas Configurações; desligado, o app não mostra nada de PJ.
+  metaPJAtiva: boolean;
   headerColor: string;
   birthDate: string;
   // Which weekdays count as work days (lembrete de relatório diário). Index = Date.getDay()
@@ -159,6 +162,7 @@ export interface AppState {
   reports: Report[];
   queue: Report[];
   metas: Record<string, number>;
+  metasPJ: Record<string, number>;   // { 'YYYY-MM': number } — meta mensal de cartão PJ
   session: Session;
   templates: Template[];
   customers: Customer[];

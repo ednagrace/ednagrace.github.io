@@ -1,9 +1,9 @@
 import { ALL_FIELDS, MONTHS } from '../constants.js';
 import { state } from '../state.js';
-import { app, render } from '../render.js';
+import { app, render, goHome } from '../render.js';
 import { pad, parseISO, currentMonthKey } from '../dateUtils.js';
 import { esc, fmtNA, num, byId } from '../format.js';
-import { metaFor, monthTotals, weeklyBreakdown } from '../aggregations.js';
+import { metaFor, monthTotals, weeklyBreakdown, metaPJFor } from '../aggregations.js';
 import { shareMonthPDF } from '../pdf.js';
 import { shiftMonth } from './list.js';
 
@@ -65,6 +65,23 @@ export function renderPanel() {
       <div class="st-label">${f.label}</div>
     </div>`).join('');
 
+  // Cartão PJ — bloco próprio, só quando a métrica está ligada nas Configurações.
+  const pjOn = !!state.config.metaPJAtiva;
+  const metaPJ = metaPJFor(monthKey);
+  const feitasPJ = (t.pjAprovadas as number) || 0;
+  const pctPJ = metaPJ > 0 ? Math.round((feitasPJ / metaPJ) * 100) : 0;
+  const pjHTML = pjOn ? `
+      <h2 class="panel-h">Cartão PJ</h2>
+      <div class="meta-card meta-card-pj">
+        <div class="row"><span class="label">🏢 Meta do mês · cartão PJ</span></div>
+        <div class="row" style="margin-top:4px">
+          <div class="big">${feitasPJ}<small> / ${metaPJ || '—'}</small></div>
+          <div style="text-align:right;font-size:22px;font-weight:800">${metaPJ ? pctPJ + '%' : ''}</div>
+        </div>
+        <div class="bar"><i style="width:${Math.min(100, pctPJ)}%"></i></div>
+        <div class="hint">Propostas PJ: ✅ ${fmtNA(t.pjAprovadas)} aprovadas · 🔍 ${fmtNA(t.pjAnalise)} em análise</div>
+      </div>` : '';
+
   const weeksHTML = weeks.length ? weeks.map(w => {
     const d = parseISO(w.week);
     const end = new Date(d); end.setDate(d.getDate() + 6);
@@ -84,6 +101,7 @@ export function renderPanel() {
         <h1>Painel do mês</h1>
         <span class="sub">${esc(state.config.promotora)} · ${esc(state.config.loja)}</span>
       </div>
+      <button class="iconbtn" id="btn-home" aria-label="Início">🏠</button>
       <button class="iconbtn" id="btn-share-month" aria-label="Compartilhar">📤</button>
     </header>
 
@@ -110,6 +128,8 @@ export function renderPanel() {
         <div class="legend">${legend}</div>
       </div>
 
+      ${pjHTML}
+
       <h2 class="panel-h">Totais do mês</h2>
       <div class="stat-grid">${tiles}</div>
 
@@ -121,6 +141,7 @@ export function renderPanel() {
     </div>`;
 
   byId('btn-back').onclick = panelBack;
+  byId('btn-home').onclick = goHome;
   byId('prev-month').onclick = () => shiftMonth(-1);
   byId('next-month').onclick = () => shiftMonth(1);
   byId('btn-month-pdf').onclick = () => shareMonthPDF(monthKey);
@@ -139,6 +160,11 @@ export function shareMonth(monthKey: string) {
   txt += `🔗 Links: ${num(t.link)}\n💳 Cartão — 🔑 ${num(t.cartaoAtivacao)} ativação\n\n`;
   txt += `*Serviços*\n💬 SMS: ${num(t.sms)}\n🎁 Bônus: ${num(t.bonus)}\n🦷 Odonto Efetivado: ${num(t.odontoEfetivado)}\n📣 Odonto Ofertado: ${num(t.odontoOfertado)}\n`;
   if (meta) txt += `\n🎯 Meta: ${num(t.aprovadas)}/${meta} aprovados (${Math.round((num(t.aprovadas) / meta) * 100)}%)\n`;
+  if (state.config.metaPJAtiva) {
+    const metaPJ = metaPJFor(monthKey);
+    txt += `\n*Cartão PJ*\n✅ Aprovadas: ${num(t.pjAprovadas)}\n🔍 Em análise: ${num(t.pjAnalise)}\n`;
+    if (metaPJ) txt += `🎯 Meta PJ: ${num(t.pjAprovadas)}/${metaPJ} (${Math.round((num(t.pjAprovadas) / metaPJ) * 100)}%)\n`;
+  }
   if (weeks.length) {
     txt += `\n*Aprovadas por semana*\n`;
     weeks.forEach(w => { const d = parseISO(w.week); txt += `• Semana ${pad(d.getDate())}/${pad(d.getMonth() + 1)}: ${w.aprovadas}\n`; });

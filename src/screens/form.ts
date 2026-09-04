@@ -1,8 +1,9 @@
 import type { Field, Report } from '../types.js';
-import { GROUPS, ALL_FIELDS, NUMERIC_KEYS, PROPOSTAS_KEYS } from '../constants.js';
+import { GROUPS, ALL_FIELDS, NUMERIC_KEYS, PROPOSTAS_KEYS,
+  PJ_PROPOSTAS_FIELDS, PJ_NUMERIC_KEYS, ALL_NUMERIC_KEYS } from '../constants.js';
 import { state, save, sessionValid } from '../state.js';
 import { LS } from '../env.js';
-import { app, render } from '../render.js';
+import { app, render, goHome } from '../render.js';
 import { todayISO, monthKeyOf, parseISO, pad } from '../dateUtils.js';
 import { esc, byId, informed, haptic, numOrNull } from '../format.js';
 import { metaFor, metaDiaVal } from '../aggregations.js';
@@ -17,10 +18,16 @@ import { toast, confirmDiscard } from '../ui.js';
 // tell whether anything was typed before asking to discard it.
 let editSnapshot = '';
 
+// Aba de cartão ativa no formulário (só aparece quando a métrica PJ está ligada nas
+// Configurações). Estado só de tela — não persiste no relatório.
+let formTab: 'comum' | 'pj' = 'comum';
+function pjTabOn(): boolean { return !!state.config.metaPJAtiva; }
+
 export function openForm(dataISO: string) {
   const existing = getReport(dataISO);
   state.editing = existing || blankReport(dataISO);
   state.editingNew = !existing;
+  formTab = 'comum';
   editSnapshot = JSON.stringify(state.editing);
   state.view = 'form';
   resetPhoto();
@@ -32,6 +39,7 @@ export function openForm(dataISO: string) {
 export function openNew() {
   state.editing = blankReport(todayISO());
   state.editingNew = true;
+  formTab = 'comum';
   editSnapshot = JSON.stringify(state.editing);
   state.view = 'form';
   resetPhoto();
@@ -50,6 +58,12 @@ export function formBack() {
   if (!confirmDiscard(formDirty())) return;
   state.view = 'list';
   render();
+}
+
+// May we leave the form right now? (HOME button / deep link) — only after the
+// same "discard what you typed?" check the back button does.
+export function formCanLeave(): boolean {
+  return confirmDiscard(formDirty());
 }
 
 // The PDF is built from what's on screen, so it only makes sense once that has
@@ -178,6 +192,7 @@ async function onPhotoPicked(f: File) {
     }
 
     p.busy = false;
+    formTab = 'comum';   // a foto lê o relatório comum — volta pra essa aba pra conferência
     render();   // rebuilds the counters with the values read
     window.scrollTo(0, 0);
     toast('Confira os números lidos da foto ✍️', 'ok');
@@ -189,13 +204,16 @@ async function onPhotoPicked(f: File) {
   }
 }
 
-function propostasTotal(r: Report): number {
-  return PROPOSTAS_KEYS.reduce((s, k) => s + (informed(r[k]) ? (r[k] as number) : 0), 0);
+// Total de propostas da aba visível: comum soma Aprovadas/Reprovadas/Em Análise;
+// PJ soma só Aprovadas/Em Análise (é o que o PJ tem).
+function propostasTotal(r: Report, tab: 'comum' | 'pj' = 'comum'): number {
+  const keys = tab === 'pj' ? PJ_NUMERIC_KEYS : PROPOSTAS_KEYS;
+  return keys.reduce((s, k) => s + (informed(r[k]) ? (r[k] as number) : 0), 0);
 }
 
 function updatePropostasBadge(r: Report) {
   const el = byId('propostas-num');
-  if (el) el.textContent = String(propostasTotal(r));
+  if (el) el.textContent = String(propostasTotal(r, pjTabOn() ? formTab : 'comum'));
 }
 
 function blankReport(dataISO: string): Report {
@@ -207,18 +225,37 @@ function blankReport(dataISO: string): Report {
     obs: '',
   };
   // A new report starts with every field NOT INFORMED (N/A), not 0. Typing 0 is a
-  // deliberate choice; leaving a field untouched keeps it N/A.
-  NUMERIC_KEYS.forEach(k => r[k] = null);
+  // deliberate choice; leaving a field untouched keeps it N/A. Inclui as chaves PJ.
+  ALL_NUMERIC_KEYS.forEach(k => r[k] = null);
   return r;
 }
 
 export function renderForm() {
   const r = state.editing as Report;
-  const groupsHTML = GROUPS.map(g => `
+  const pjOn = pjTabOn();
+  if (!pjOn) formTab = 'comum';
+
+  const comumHTML = GROUPS.map(g => `
     <div class="group">
       <h2><span>${g.emoji}</span> ${g.title}</h2>
       ${g.fields.map(f => counterHTML(f, r[f.key])).join('')}
     </div>`).join('');
+
+  // Aba PJ: só os contadores que o cartão PJ tem (Aprovadas / Em Análise).
+  const pjHTML = `
+    <div class="group">
+      <h2><span>🏢</span> Cartão PJ</h2>
+      <div class="daily-hint" style="margin:0 0 10px">Cartão PJ registra apenas propostas aprovadas e em análise.</div>
+      ${PJ_PROPOSTAS_FIELDS.map(f => counterHTML(f, r[f.key])).join('')}
+    </div>`;
+
+  const groupsHTML = !pjOn ? comumHTML : `
+    <div class="form-tabs" id="form-tabs" role="tablist">
+      <button type="button" class="form-tab ${formTab === 'comum' ? 'active' : ''}" data-tab="comum">💳 Comum</button>
+      <button type="button" class="form-tab ${formTab === 'pj' ? 'active' : ''}" data-tab="pj">🏢 Cartão PJ</button>
+    </div>
+    <div data-panel="comum" ${formTab === 'comum' ? '' : 'hidden'}>${comumHTML}</div>
+    <div data-panel="pj" ${formTab === 'pj' ? '' : 'hidden'}>${pjHTML}</div>`;
 
   app.innerHTML = `
     <header class="appbar">
@@ -227,6 +264,7 @@ export function renderForm() {
         <h1>${state.editingNew ? 'Novo' : 'Editar'} Relatório</h1>
         <span class="sub">${esc(state.config.promotora)} · ${esc(state.config.loja)}</span>
       </div>
+      <button class="iconbtn" id="btn-home" aria-label="Início">🏠</button>
       ${!state.editingNew ? '<button class="iconbtn" id="btn-del" aria-label="Excluir">🗑️</button>' : ''}
     </header>
 
@@ -236,7 +274,7 @@ export function renderForm() {
           <label for="f-data">Data do relatório</label>
           <input id="f-data" type="date" value="${esc(r.data)}" max="${todayISO()}" />
         </div>
-        <div class="propostas-badge" id="propostas-badge">📋 <b id="propostas-num">${propostasTotal(r)}</b> propostas</div>
+        <div class="propostas-badge" id="propostas-badge">📋 <b id="propostas-num">${propostasTotal(r, pjOn ? formTab : 'comum')}</b> propostas</div>
       </div>
 
       <div id="photo-bar" class="photo-bar">${photoBarHTML()}</div>
@@ -262,14 +300,31 @@ export function renderForm() {
   // eventos gerais
   wirePhotoBar();
   byId('btn-back').onclick = byId('btn-cancel').onclick = formBack;
+  byId('btn-home').onclick = goHome;
   byId('f-data').onchange = (e: Event) => { r.data = (e.target as HTMLInputElement).value; refreshPdfBtn(); };
   byId('f-obs').oninput = (e: Event) => { r.obs = (e.target as HTMLTextAreaElement).value; refreshPdfBtn(); };
   byId('btn-save').onclick = onSave;
   byId('btn-pdf').onclick = () => sharePDF(Object.assign({}, r));
   if (byId('btn-del')) byId('btn-del').onclick = onDelete;
 
-  // liga os contadores
-  ALL_FIELDS.forEach(f => wireCounter(f, r));
+  // abas Comum / Cartão PJ (só quando a métrica PJ está ligada) — troca de painel sem re-render
+  if (pjOn) {
+    document.querySelectorAll('#form-tabs .form-tab').forEach((b) => {
+      (b as HTMLElement).onclick = () => {
+        formTab = (b as HTMLElement).getAttribute('data-tab') as 'comum' | 'pj';
+        document.querySelectorAll('#form-tabs .form-tab').forEach((x) => x.classList.toggle('active', x === b));
+        document.querySelectorAll('[data-panel]').forEach((p) => {
+          (p as HTMLElement).hidden = (p as HTMLElement).getAttribute('data-panel') !== formTab;
+        });
+        updatePropostasBadge(r);
+        haptic();
+      };
+    });
+  }
+
+  // liga os contadores (os de PJ só existem no DOM quando a aba está ligada)
+  const fields = pjOn ? [...ALL_FIELDS, ...PJ_PROPOSTAS_FIELDS] : ALL_FIELDS;
+  fields.forEach(f => wireCounter(f, r));
   refreshPdfBtn();
 }
 
@@ -353,7 +408,7 @@ function wireCounter(f: Field, r: Report) {
       const dh = byId('dhint-' + f.key);
       if (dh) { dh.textContent = dailyHintText(v); dh.classList.toggle('hit', informed(v) && (v as number) >= metaDiaVal()); }
     }
-    if (PROPOSTAS_KEYS.includes(f.key)) updatePropostasBadge(r);
+    if (PROPOSTAS_KEYS.includes(f.key) || PJ_NUMERIC_KEYS.includes(f.key)) updatePropostasBadge(r);
     refreshPdfBtn();
   }
   // n === null => N/A; a number => that value. Also writes the input (buttons/steppers use this).
@@ -402,7 +457,7 @@ async function onSave() {
   r.promotora = state.config.promotora;
   r.loja = state.config.loja;
   r.metaMes = metaFor(monthKeyOf(r.data));
-  NUMERIC_KEYS.forEach(k => r[k] = numOrNull(r[k]));   // preserves N/A (doesn't force 0)
+  ALL_NUMERIC_KEYS.forEach(k => r[k] = numOrNull(r[k]));   // preserves N/A (doesn't force 0); inclui PJ
 
   const btn = byId('btn-save');
   btn.disabled = true; btn.textContent = 'Salvando...';

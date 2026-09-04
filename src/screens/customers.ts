@@ -1,6 +1,6 @@
 import type { Customer } from '../types.js';
 import { state, sessionValid } from '../state.js';
-import { app, render } from '../render.js';
+import { app, render, goHome } from '../render.js';
 import { esc, byId } from '../format.js';
 import { pad, parseISO, todayISO } from '../dateUtils.js';
 import { isOnline, pullCustomers, getCustomerDetalhe, addCustomerEvent } from '../api.js';
@@ -41,6 +41,7 @@ export function renderCustomers() {
     <header class="appbar">
       <button class="iconbtn" id="btn-back" aria-label="Voltar">‹</button>
       <div style="flex:1"><h1>Clientes</h1><span class="sub">${pick ? 'Toque para escolher' : filteredCustomers().length + ' cliente(s)'}</span></div>
+      <button class="iconbtn" id="btn-home" aria-label="Início">🏠</button>
     </header>
     <div class="screen">
       <div class="search">
@@ -59,6 +60,7 @@ export function renderCustomers() {
     <button class="fab" id="fab-novo-cliente"><span class="plus">＋</span> Novo cliente</button>
   `;
   byId('btn-back').onclick = customersBack;
+  byId('btn-home').onclick = goHome;
   byId('fab-novo-cliente').onclick = () => openContactSheet(null);
   const s = byId('cu-search') as HTMLInputElement;
   s.oninput = () => { state.customersSearch = s.value; renderCustomersSoft(); };

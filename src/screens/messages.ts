@@ -1,6 +1,6 @@
 import type { Customer, CustomList, Template, TemplateGender, MsgState } from '../types.js';
 import { state, sessionValid, save } from '../state.js';
-import { app, render } from '../render.js';
+import { app, render, goHome } from '../render.js';
 import { pad } from '../dateUtils.js';
 import { esc, byId } from '../format.js';
 import { isOnline, pullCustomers, pullTemplates, authHeaders, saveSettingsRemote } from '../api.js';
@@ -55,6 +55,11 @@ export function msgBack() {
   if (!confirmDiscard(msgDirty())) return;
   state.view = 'list';
   render();
+}
+
+// HOME button / deep link: same "discard the template edit?" check as "Voltar".
+export function msgCanLeave(): boolean {
+  return confirmDiscard(msgDirty());
 }
 
 /* ---------------- Filtro do seletor de templates por gênero ----------------
@@ -231,6 +236,7 @@ export function renderMsg() {
     <header class="appbar">
       <button class="iconbtn" id="btn-back" aria-label="Voltar">‹</button>
       <div style="flex:1"><h1>Mensagens</h1><span class="sub">Templates de WhatsApp</span></div>
+      <button class="iconbtn" id="btn-home" aria-label="Início">🏠</button>
     </header>
     <div class="screen">
       <div class="field">
@@ -267,6 +273,7 @@ export function renderMsg() {
     </div>`;
 
   byId('btn-back').onclick = msgBack;
+  byId('btn-home').onclick = goHome;
   byId('seg-pessoa').onclick = () => { state.msgDestMode = 'pessoa'; render(); };
   byId('seg-lista').onclick = () => { state.msgDestMode = 'lista'; render(); };
   document.querySelectorAll('.gender-filter [data-gf]').forEach(btn => {

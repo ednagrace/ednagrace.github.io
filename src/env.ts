@@ -23,11 +23,13 @@ export const LS = {
   reports: PREFIX + 'reports.cache',
   queue:   PREFIX + 'queue',
   metas:   PREFIX + 'metas',
+  metasPJ: PREFIX + 'metasPJ',       // { 'YYYY-MM': number } — meta mensal de cartão PJ
   session: PREFIX + 'session',
   settingsPending: PREFIX + 'settingsPending',
   templates: PREFIX + 'templates',
   customers: PREFIX + 'customers',
   customLists: PREFIX + 'customLists',
+  lastRoute: PREFIX + 'lastRoute',   // which screen a cold start reopens (see router.ts)
 };
 
 // Fixed site config — the same for any browser/device.

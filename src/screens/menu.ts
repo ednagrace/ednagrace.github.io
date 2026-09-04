@@ -1,6 +1,6 @@
 import type { TemplateGender } from '../types.js';
 import { MONTHS, APP_VERSION, SUPORTE_WPP } from '../constants.js';
-import { ENVS, ALL_FIELDS } from '../constants.js';
+import { ENVS, ALL_FIELDS, PJ_PROPOSTAS_FIELDS } from '../constants.js';
 import { ENV, IS_STAGING, API_BASE, apiUrl } from '../env.js';
 import { switchEnv } from '../env.js';
 import { state, save, sessionValid } from '../state.js';
@@ -152,6 +152,11 @@ function openConfig() {
       <label>Meta do dia (cartões aprovados)</label>
       <input id="c-metadia" type="number" inputmode="numeric" min="0" value="${esc(c.metaDia != null ? c.metaDia : 3)}" />
     </div>
+    <label class="check-row">
+      <input type="checkbox" id="c-metapj" ${c.metaPJAtiva ? 'checked' : ''} />
+      <span>🏢 Acompanhar cartão PJ
+        <small>Adiciona uma aba de cartão PJ no relatório (propostas aprovadas e em análise) e uma meta mensal só para PJ.</small></span>
+    </label>
     <div class="field">
       <label>📅 Dias de trabalho</label>
       <div class="dow-row" id="c-dow">
@@ -206,9 +211,10 @@ function openConfig() {
 
     const val = (id: string) => (byId(id) as HTMLInputElement | null)?.value ?? '';
     // chosenColor (definida abaixo) guarda a última cor válida; entra na assinatura.
+    const checked = (id: string) => !!(byId(id) as HTMLInputElement | null)?.checked;
     const cfgSig = () => JSON.stringify([
       val('c-prom'), val('c-loja'), val('c-metadia'), val('c-birth'),
-      promGender, JSON.stringify(dias), chosenColor,
+      promGender, JSON.stringify(dias), chosenColor, checked('c-metapj'),
     ]);
     let initialSig = '';   // capturada no fim deste onReady, quando os campos já existem
 
@@ -287,6 +293,7 @@ function openConfig() {
       const dob = byId('c-birth').value;   // 'YYYY-MM-DD' or ''
       state.config.birthDate = /^\d{4}-\d{2}-\d{2}$/.test(dob) ? dob : '';
       state.config.diasTrabalho = dias.slice();
+      state.config.metaPJAtiva = checked('c-metapj');
       if (!IS_STAGING) state.config.headerColor = (chosenColor === DEFAULT_HEADER) ? '' : (chosenColor as string);
       save(LS.config, state.config);
       saveSettingsRemote();          // save to Neon (shared)
@@ -312,7 +319,13 @@ export function generateSheet(month?: string) {
   // A column with at least one informed value that month comes checked; 100% N/A comes
   // unchecked (auto-hide). But any of them can be checked/unchecked.
   const hasData = (k: string) => rows.some(r => informed(r[k]));
-  const linhas = ALL_FIELDS.map(f => `
+  // Colunas de cartão PJ entram no seletor só quando a métrica está ligada (ou quando o
+  // mês já tem algum dado de PJ — casos em que a métrica foi desligada depois).
+  const pjHasData = PJ_PROPOSTAS_FIELDS.some(f => hasData(f.key));
+  const pickFields = (state.config.metaPJAtiva || pjHasData)
+    ? [...ALL_FIELDS, ...PJ_PROPOSTAS_FIELDS]
+    : ALL_FIELDS;
+  const linhas = pickFields.map(f => `
     <label class="col-pick">
       <input type="checkbox" data-col="${f.key}" ${hasData(f.key) ? 'checked' : ''} />
       <span class="col-name">${f.emoji} ${f.label}</span>

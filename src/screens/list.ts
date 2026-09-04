@@ -6,7 +6,8 @@ import { app, render } from '../render.js';
 import { pad, parseISO, monthKeyOf, weekday, currentMonthKey } from '../dateUtils.js';
 import { esc, num, fmtNA, informed } from '../format.js';
 import { isOnline, reportsForView, getReport, flushQueue, deleteReportNow } from '../api.js';
-import { metaFor, metaDiaVal, aprovadasNoMes, isBirthday, ageToday, setMeta } from '../aggregations.js';
+import { metaFor, metaDiaVal, aprovadasNoMes, isBirthday, ageToday, setMeta,
+  metaPJFor, setMetaPJ, aprovadasPJNoMes } from '../aggregations.js';
 import { saveSettingsRemote } from '../api.js';
 import { sharePDF } from '../pdf.js';
 import { toast } from '../ui.js';
@@ -23,6 +24,13 @@ export function renderList() {
   const feitas = aprovadasNoMes(monthKey);
   const pct = meta > 0 ? Math.round((feitas / meta) * 100) : 0;
   const falta = Math.max(0, meta - feitas);
+
+  // Cartão PJ — segundo card de meta, só quando a métrica está ligada nas Configurações.
+  const pjOn = !!state.config.metaPJAtiva;
+  const metaPJ = metaPJFor(monthKey);
+  const feitasPJ = aprovadasPJNoMes(monthKey);
+  const pctPJ = metaPJ > 0 ? Math.round((feitasPJ / metaPJ) * 100) : 0;
+  const faltaPJ = Math.max(0, metaPJ - feitasPJ);
 
   let rows = reportsForView().filter(r => monthKeyOf(r.data) === monthKey);
   if (state.search.trim()) {
@@ -64,6 +72,20 @@ export function renderList() {
         <div class="hint meta-dia-line">🎯 Meta do dia: <b>${metaDiaVal()}</b> aprovados <button class="edit-meta" id="btn-meta-dia">editar</button></div>
       </div>
 
+      ${pjOn ? `
+      <div class="meta-card meta-card-pj">
+        <div class="row">
+          <span class="label">🏢 Meta do mês · cartão PJ</span>
+          <button class="edit-meta" id="btn-meta-pj">editar</button>
+        </div>
+        <div class="row" style="margin-top:4px">
+          <div class="big">${feitasPJ}<small> / ${metaPJ || '—'}</small></div>
+          <div style="text-align:right"><div style="font-size:22px;font-weight:800">${metaPJ ? pctPJ + '%' : ''}</div></div>
+        </div>
+        <div class="bar"><i style="width:${Math.min(100, pctPJ)}%"></i></div>
+        <div class="hint">${metaPJ ? (faltaPJ > 0 ? `Faltam <b>${faltaPJ}</b> para a meta PJ` : 'Meta PJ batida! 🎉') : 'Toque em “editar” para definir a meta PJ do mês'}</div>
+      </div>` : ''}
+
       <div class="month-nav">
         <button id="prev-month" aria-label="Mês anterior">‹</button>
         <div class="label">${MONTHS[m-1]} ${y}</div>
@@ -96,6 +118,8 @@ export function renderList() {
   (document.getElementById('btn-sheet-month') as HTMLElement).onclick = () => generateSheet(monthKey);
   (document.getElementById('btn-meta') as HTMLElement).onclick = editMetaPrompt;
   (document.getElementById('btn-meta-dia') as HTMLElement).onclick = editMetaDiaPrompt;
+  const btnMetaPJ = document.getElementById('btn-meta-pj');
+  if (btnMetaPJ) btnMetaPJ.onclick = editMetaPJPrompt;
   const s = document.getElementById('search') as HTMLInputElement;
   s.oninput = () => { state.search = s.value; /* re-render leve */ renderListSoft(); };
   const trySync = document.getElementById('try-sync');
@@ -237,6 +261,14 @@ function cardHTML(r: Report): string {
   if (num(r.cartaoAtivacao)) chips.push(`<span class="chip">🔑 ${num(r.cartaoAtivacao)}</span>`);
   const servicos = num(r.sms)+num(r.bonus)+num(r.odontoEfetivado)+num(r.odontoOfertado);
   if (servicos) chips.push(`<span class="chip">⭐ ${servicos}</span>`);
+  // Chip de cartão PJ — aparece sempre que o relatório tem algum número PJ (dá pra
+  // saber antes de abrir), independente da métrica estar ligada nas preferências.
+  if (informed(r.pjAprovadas) || informed(r.pjAnalise)) {
+    const pjParts: string[] = [];
+    if (informed(r.pjAprovadas)) pjParts.push(`✅ ${r.pjAprovadas}`);
+    if (informed(r.pjAnalise)) pjParts.push(`🔍 ${r.pjAnalise}`);
+    chips.push(`<span class="chip pj">🏢 ${pjParts.join(' · ')}</span>`);
+  }
   return `
     <div class="card-wrap">
       <div class="swipe-bg" data-del="${r.data}" title="Excluir">
@@ -277,6 +309,11 @@ export function shiftMonth(delta: number) {
     setMeta(next, metaFor(state.month));
     saveSettingsRemote();
   }
+  // Mesma regra pra meta de cartão PJ (só quando a métrica está ligada).
+  if (delta > 0 && state.config.metaPJAtiva && !(next in state.metasPJ)) {
+    setMetaPJ(next, metaPJFor(state.month));
+    saveSettingsRemote();
+  }
   state.month = next;
   render();
 }
@@ -287,6 +324,16 @@ function editMetaPrompt() {
   const v = window.prompt(`Meta de cartões aprovados para ${MONTHS[m-1]} ${y}:`, String(cur));
   if (v === null) return;
   setMeta(state.month, v);
+  saveSettingsRemote();
+  render();
+}
+
+function editMetaPJPrompt() {
+  const cur = metaPJFor(state.month) || '';
+  const [y, m] = state.month.split('-').map(Number);
+  const v = window.prompt(`Meta de cartões PJ aprovados para ${MONTHS[m-1]} ${y}:`, String(cur));
+  if (v === null) return;
+  setMetaPJ(state.month, v);
   saveSettingsRemote();
   render();
 }

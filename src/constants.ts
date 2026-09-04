@@ -32,6 +32,19 @@ export const ALL_FIELDS: Field[] = GROUPS.flatMap(g => g.fields);
 export const NUMERIC_KEYS: string[] = ALL_FIELDS.map(f => f.key);
 export const PROPOSTAS_KEYS: string[] = GROUPS.find(g => g.title === 'Propostas')!.fields.map(f => f.key);
 
+/* ---------- Cartão PJ ----------
+   Segunda categoria de cartão, numa aba própria do formulário. PJ acompanha apenas
+   propostas aprovadas e em análise — não tem reprovadas nem os demais campos (links,
+   ativação, serviços). Chaves ficam com o prefixo "pj". */
+export const PJ_PROPOSTAS_FIELDS: Field[] = [
+  { key: 'pjAprovadas', label: 'Aprovadas',  emoji: '✅' },
+  { key: 'pjAnalise',   label: 'Em Análise', emoji: '🔍' },
+];
+export const PJ_NUMERIC_KEYS: string[] = PJ_PROPOSTAS_FIELDS.map(f => f.key);
+// Todas as chaves numéricas que um relatório carrega (comum + PJ) — usada por quem
+// zera/normaliza/soma o relatório inteiro (form, aggregations, pdf).
+export const ALL_NUMERIC_KEYS: string[] = [...NUMERIC_KEYS, ...PJ_NUMERIC_KEYS];
+
 export const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
   'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 export const MONTHS_SHORT = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
@@ -60,6 +73,7 @@ export const APP_VERSION = 'v73'; // bump together with sw.js's CACHE on every r
 export const ADMIN_EMAIL = 'jpantunesdesouza@gmail.com';
 
 export const DEFAULT_META = 22; // default monthly goal for approved proposals (editable)
+export const DEFAULT_META_PJ = 10; // default monthly goal for approved PJ cards (editable per month)
 export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 export const SUPORTE_WPP = '5519999974213'; // 55 (BR) + 19 99997-4213
 

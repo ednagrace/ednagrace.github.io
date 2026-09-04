@@ -1,5 +1,5 @@
 import type { MonthTotals, WeekTotal } from './types.js';
-import { NUMERIC_KEYS, DEFAULT_META } from './constants.js';
+import { ALL_NUMERIC_KEYS, DEFAULT_META, DEFAULT_META_PJ } from './constants.js';
 import { state, save } from './state.js';
 import { LS } from './env.js';
 import { monthKeyOf, parseISO, pad } from './dateUtils.js';
@@ -27,6 +27,25 @@ export function aprovadasNoMes(monthKey: string): number {
     .reduce((sum, r) => sum + (Number(r.aprovadas) || 0), 0);
 }
 
+/* ---------- Monthly goal — cartão PJ ---------- */
+// Mesma regra de metaFor: sem meta própria no mês, carrega a do mês anterior mais recente;
+// só cai no padrão (10) se nunca houve meta antes.
+export function metaPJFor(monthKey: string): number {
+  if (monthKey in state.metasPJ) return Number(state.metasPJ[monthKey]) || 0;
+  const earlier = Object.keys(state.metasPJ).filter(k => k < monthKey).sort();
+  if (earlier.length) return Number(state.metasPJ[earlier[earlier.length - 1]]) || 0;
+  return DEFAULT_META_PJ;
+}
+export function setMetaPJ(monthKey: string, val: any) {
+  state.metasPJ[monthKey] = Number(val) || 0;
+  save(LS.metasPJ, state.metasPJ);
+}
+export function aprovadasPJNoMes(monthKey: string): number {
+  return reportsForView()
+    .filter(r => monthKeyOf(r.data) === monthKey)
+    .reduce((sum, r) => sum + (Number(r.pjAprovadas) || 0), 0);
+}
+
 /* ---------- Aggregations (panel / summary) ---------- */
 export function monthReports(monthKey: string) {
   return reportsForView().filter(r => monthKeyOf(r.data) === monthKey)
@@ -36,8 +55,8 @@ export function monthTotals(monthKey: string): MonthTotals {
   const rows = monthReports(monthKey);
   const t: any = {};
   // Sum only the informed values. If NOBODY informed the field that month, the total is
-  // N/A (null), not 0 — the panel shows "—".
-  NUMERIC_KEYS.forEach(k => {
+  // N/A (null), not 0 — the panel shows "—". Inclui as chaves de cartão PJ (pjAprovadas, pjAnalise).
+  ALL_NUMERIC_KEYS.forEach(k => {
     let s = 0, any = false;
     rows.forEach(r => { if (informed(r[k])) { s += r[k] as number; any = true; } });
     t[k] = any ? s : null;
