@@ -21,7 +21,10 @@ import { openPanel } from './panel.js';
 import { openImport } from './import.js';
 import { openMsg, sendCartaoLink } from './messages.js';
 import { openCustomers } from './customers.js';
-import { pushSupported, currentPushSubscription, subscribeToPush, unsubscribeFromPush } from '../push.js';
+import {
+  pushSupported, currentPushSubscription, subscribeToPush, unsubscribeFromPush,
+  sendTestPush, runRemindersNow,
+} from '../push.js';
 
 /* ---------------- MENU / SETTINGS ---------------- */
 export function openMenu() {
@@ -204,6 +207,14 @@ function openConfig() {
       <span>🔔 Notificações de lembrete
         <small>Avisa neste aparelho quando um cliente vencer a data de retorno, e à noite se ainda faltar fazer o relatório do dia.</small></span>
     </label>` : ''}
+    ${pushSupported() && isAdmin() ? `
+    <div class="field" style="margin-top:-4px">
+      <div class="col-actions">
+        <button type="button" class="chip-btn" id="c-push-test">🔔 Testar notificação agora</button>
+        <button type="button" class="chip-btn" id="c-push-run">▶️ Rodar lembretes agora</button>
+      </div>
+      <div class="status-line">Ferramentas de teste — só o desenvolvedor vê estes botões.</div>
+    </div>` : ''}
     <div class="actions">
       <button class="primary" id="c-save" style="flex:1">Salvar</button>
     </div>
@@ -246,6 +257,8 @@ function openConfig() {
         pushBox.disabled = false;
       };
     }
+    if (byId('c-push-test')) (byId('c-push-test') as HTMLButtonElement).onclick = () => sendTestPush();
+    if (byId('c-push-run')) (byId('c-push-run') as HTMLButtonElement).onclick = () => runRemindersNow();
 
     // Header color picker (production only): primaries + spectrum grid + lightness + RGB.
     // chosenColor always holds the last VALID color; Save uses it.
