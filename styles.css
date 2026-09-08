@@ -207,6 +207,14 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 }
 .propostas-badge b { font-size: 18px; font-weight: 800; }
 
+/* ---------- Zerar / Limpar tudo (preenche todos os contadores de uma vez) ---------- */
+.bulk-fill { display: flex; gap: 8px; margin-top: 12px; }
+.bulk-btn {
+  flex: 1; height: 42px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--card); color: var(--ink); font-weight: 700; font-size: 13px;
+}
+.bulk-btn:active { background: var(--red-soft); }
+
 /* ---------- "Preencher com uma foto" (dentro do formulário) ---------- */
 .photo-bar { margin-top: 12px; }
 .photo-bar .ph-btn { margin-top: 0; }

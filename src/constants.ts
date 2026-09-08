@@ -69,7 +69,7 @@ export const ALLOWLIST = [
 ];
 
 export const GOOGLE_CLIENT_ID = '81605218542-e00ff2h9oontd7vrtic5gpt0cf0but6u.apps.googleusercontent.com';
-export const APP_VERSION = 'v74'; // bump together with sw.js's CACHE on every release
+export const APP_VERSION = 'v75'; // bump together with sw.js's CACHE on every release
 export const ADMIN_EMAIL = 'jpantunesdesouza@gmail.com';
 
 // Textos de inclusão — aparecem junto dos campos de gênero e no rodapé / login.

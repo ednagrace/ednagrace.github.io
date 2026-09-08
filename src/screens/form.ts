@@ -280,6 +280,12 @@ export function renderForm() {
       <div id="photo-bar" class="photo-bar">${photoBarHTML()}</div>
       <input type="file" id="photo-file" accept="image/*" hidden />
 
+      <div class="bulk-fill">
+        <button type="button" class="bulk-btn" id="btn-bulk-zero">0️⃣ Zerar tudo</button>
+        <button type="button" class="bulk-btn" id="btn-bulk-clear">🧹 Limpar tudo</button>
+      </div>
+      <div class="daily-hint" style="margin:4px 0 0">Contador vazio salva como N/A — não entra nas contas.</div>
+
       ${groupsHTML}
 
       <div class="group obs">
@@ -299,6 +305,8 @@ export function renderForm() {
 
   // eventos gerais
   wirePhotoBar();
+  byId('btn-bulk-zero').onclick = () => bulkFill(0);
+  byId('btn-bulk-clear').onclick = () => bulkFill(null);
   byId('btn-back').onclick = byId('btn-cancel').onclick = formBack;
   byId('btn-home').onclick = goHome;
   byId('f-data').onchange = (e: Event) => { r.data = (e.target as HTMLInputElement).value; refreshPdfBtn(); };
@@ -444,6 +452,24 @@ function wireCounter(f: Field, r: Report) {
       haptic();
     };
   });
+}
+
+/* "Zerar tudo" / "Limpar tudo" — preenche de uma vez todos os contadores do
+   relatório. `0` marca o dia como "sem nada" (conta como zero nas metas/somas);
+   `null` deixa vazio (N/A, não entra nas contas). Só mexe nas chaves PJ quando a
+   aba PJ está ligada. Pede confirmação se já houver algum contador preenchido. */
+function bulkFill(v: 0 | null) {
+  const r = state.editing as Report;
+  const keys = pjTabOn() ? ALL_NUMERIC_KEYS : NUMERIC_KEYS;
+  const hasData = keys.some(k => informed(r[k]));
+  if (hasData && !window.confirm(v === 0
+      ? 'Zerar todos os contadores deste relatório?'
+      : 'Deixar todos os contadores vazios (N/A)?')) return;
+  keys.forEach(k => { r[k] = v; });
+  render();                 // rebuilds every counter with the new value
+  window.scrollTo(0, 0);
+  haptic();
+  toast(v === 0 ? 'Todos os contadores em 0' : 'Contadores vazios — salvam como N/A', 'ok');
 }
 
 async function onSave() {
