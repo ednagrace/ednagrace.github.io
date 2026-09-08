@@ -132,6 +132,79 @@ export async function sendTestPush(): Promise<void> {
   }
 }
 
+// Anda passo a passo pelo fluxo de inscrição e RELATA onde parou. Não depende de
+// "print do alerta certo" — junta tudo num relatório só.
+export async function diagnosePush(): Promise<void> {
+  const L: string[] = [];
+  const add = (s: string) => { L.push(s); };
+  const show = () => { const t = L.join('\n'); console.log('[push-diag]\n' + t); alert(t); };
+  try {
+    add('display-mode standalone: ' + (matchMedia('(display-mode: standalone)').matches ? 'sim' : 'não'));
+    add('serviceWorker: ' + ('serviceWorker' in navigator));
+    add('PushManager: ' + ('PushManager' in window));
+    add('Notification: ' + ('Notification' in window));
+    if (!pushSupported()) { add('\n=> este navegador não tem as 3 APIs. Fim.'); return show(); }
+    add('Notification.permission: ' + Notification.permission);
+    add('SW controller: ' + (navigator.serviceWorker.controller ? 'sim' : 'NÃO (página não controlada)'));
+
+    let reg: ServiceWorkerRegistration;
+    try {
+      reg = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout 8s')), 8000)),
+      ]);
+      add('serviceWorker.ready: ok · scope ' + reg.scope);
+    } catch (e: any) { add('serviceWorker.ready: FALHOU (' + e.message + ')'); return show(); }
+
+    const existing = await reg.pushManager.getSubscription();
+    add('inscrição já existente: ' + (existing ? existing.endpoint.slice(0, 60) + '…' : 'nenhuma'));
+
+    let root: any;
+    try {
+      root = await (await fetch(apiUrl('/'), { cache: 'no-store' })).json();
+      add('GET / : ok · pushPublicKey ' + (root.pushPublicKey ? root.pushPublicKey.length + ' chars' : 'AUSENTE'));
+    } catch (e: any) { add('GET / : FALHOU (' + e.message + ')'); return show(); }
+    if (!root.pushPublicKey) return show();
+
+    if (Notification.permission !== 'granted') {
+      const p = await Notification.requestPermission();
+      add('requestPermission => ' + p);
+      if (p !== 'granted') return show();
+    }
+
+    let sub: PushSubscription;
+    try {
+      sub = existing || await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(root.pushPublicKey) as BufferSource,
+      });
+      add('pushManager.subscribe: OK');
+    } catch (e: any) {
+      add('pushManager.subscribe: FALHOU · ' + (e && e.name) + ': ' + (e && e.message));
+      return show();
+    }
+
+    try {
+      const res = await fetch(apiUrl('/api/push'), {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ subscription: sub.toJSON() }),
+      });
+      const body = await res.text();
+      add('POST /api/push: ' + res.status + ' · ' + body.slice(0, 120));
+    } catch (e: any) { add('POST /api/push: FALHOU (' + e.message + ')'); }
+
+    try {
+      const g = await fetch(apiUrl('/api/push'), { headers: authHeaders() });
+      add('GET /api/push: ' + g.status + ' · ' + (await g.text()).slice(0, 80));
+    } catch (e: any) { add('GET /api/push: FALHOU (' + e.message + ')'); }
+
+    add('\n=> se POST deu 200 e GET diz subscribed:true, está tudo certo.');
+    show();
+  } catch (e: any) {
+    add('\nERRO inesperado: ' + (e && e.message ? e.message : e));
+    show();
+  }
+}
+
 // Roda a rotina diária de lembretes AGORA, ignorando a hora e os dias de trabalho
 // (só admin). Útil para testar o "relatório de hoje pendente" fora das 18h.
 export async function runRemindersNow(): Promise<void> {

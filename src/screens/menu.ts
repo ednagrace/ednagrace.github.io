@@ -23,7 +23,7 @@ import { openMsg, sendCartaoLink } from './messages.js';
 import { openCustomers } from './customers.js';
 import {
   pushSupported, currentPushSubscription, subscribeToPush, unsubscribeFromPush,
-  sendTestPush, runRemindersNow,
+  sendTestPush, runRemindersNow, diagnosePush,
 } from '../push.js';
 
 /* ---------------- MENU / SETTINGS ---------------- */
@@ -212,6 +212,7 @@ function openConfig() {
       <div class="col-actions">
         <button type="button" class="chip-btn" id="c-push-test">🔔 Testar notificação agora</button>
         <button type="button" class="chip-btn" id="c-push-run">▶️ Rodar lembretes agora</button>
+        <button type="button" class="chip-btn" id="c-push-diag">🔍 Diagnóstico</button>
       </div>
       <div class="status-line">Ferramentas de teste — só o desenvolvedor vê estes botões.</div>
     </div>` : ''}
@@ -259,6 +260,7 @@ function openConfig() {
     }
     if (byId('c-push-test')) (byId('c-push-test') as HTMLButtonElement).onclick = () => sendTestPush();
     if (byId('c-push-run')) (byId('c-push-run') as HTMLButtonElement).onclick = () => runRemindersNow();
+    if (byId('c-push-diag')) (byId('c-push-diag') as HTMLButtonElement).onclick = () => diagnosePush();
 
     // Header color picker (production only): primaries + spectrum grid + lightness + RGB.
     // chosenColor always holds the last VALID color; Save uses it.
