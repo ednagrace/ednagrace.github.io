@@ -146,6 +146,10 @@ function cargoWord(): string {
   if (g === 'masculino') return 'promotor';
   return 'promotore';
 }
+// The placeholders applyPlaceholders() knows how to fill. Used to warn when a
+// modelo is saved without any of them (see saveTemplate).
+const PLACEHOLDER_RE = /\{(saudacao|contato|oae?|hoje|promotora|cargo|loja)\}/i;
+
 function applyPlaceholders(s: string, contatoOverride?: Customer | null): string {
   const d = new Date();
   const today = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
@@ -207,7 +211,7 @@ export function renderMsg() {
     const mark = !state.msgGender && gk ? genderMark[gk] : '';
     return `<option value="${t.id}"${String(t.id) === String(cur.id) ? ' selected' : ''}>${mark}${esc(t.title)}</option>`;
   };
-  const novoOpt = '<option value="">— Novo template —</option>';
+  const novoOpt = '<option value="">— Novo modelo —</option>';
   let options: string;
   if (state.msgGender === 'o') {
     // Filtro "Outro": LGBTQIA+ primeiro, depois os de gênero não definido.
@@ -231,9 +235,9 @@ export function renderMsg() {
   if (mode === 'pessoa' && ct) {
     const nome = `<b>${esc(customerLabel(ct))}</b>`;
     if (!custKey) {
-      genderHint = `${nome} está sem gênero no cadastro — mostrando todos os templates.`;
+      genderHint = `${nome} está sem gênero no cadastro — mostrando todos os modelos.`;
     } else if (state.msgGender === custKey) {
-      genderHint = `Templates no gênero de ${nome}, do cadastro.`;
+      genderHint = `Modelos no gênero de ${nome}, do cadastro.`;
     } else {
       genderHint = `${nome} é ${GENDER_WORD[custKey]} no cadastro — <button type="button" class="link-btn" id="gf-reset">usar esse gênero</button>.`;
     }
@@ -242,7 +246,7 @@ export function renderMsg() {
   app.innerHTML = `
     <header class="appbar">
       <button class="iconbtn" id="btn-back" aria-label="Voltar">‹</button>
-      <div style="flex:1"><h1>Mensagens</h1><span class="sub">Templates de WhatsApp</span></div>
+      <div style="flex:1"><h1>Mensagens</h1><span class="sub">Modelos de WhatsApp</span></div>
       <button class="iconbtn" id="btn-home" aria-label="Início">🏠</button>
     </header>
     <div class="screen">
@@ -255,12 +259,12 @@ export function renderMsg() {
       </div>
       ${mode === 'pessoa' ? contatoBloco : listaBloco}
       <div class="field">
-        <label>Template</label>
+        <label>Modelo</label>
         ${genderFilter}
         ${genderHint ? `<div class="hint-inline">${genderHint}</div>` : ''}
         <select id="tpl-sel">${options}</select>
-        ${state.msgGender && !tpls.length ? '<div class="hint-inline">Nenhum template para esse gênero.</div>' : ''}
-        <div class="hint-inline">O gênero classifica o template e segue o cadastro do cliente — não precisa marcar de novo.</div>
+        ${state.msgGender && !tpls.length ? '<div class="hint-inline">Nenhum modelo para esse gênero.</div>' : ''}
+        <div class="hint-inline">O gênero classifica o modelo e segue o cadastro do cliente — não precisa marcar de novo.</div>
         <div class="hint-inline hint-incl">${GENERO_OUTRO_NOTA}</div>
       </div>
       <div class="field">
@@ -349,7 +353,22 @@ function sendTemplate() {
 
 async function saveTemplate() {
   const t = state.msg;
-  if (!t.title.trim()) { toast('Dê um título ao template', 'err'); return; }
+  if (!t.title.trim()) { toast('Dê um título ao modelo', 'err'); return; }
+  // Um modelo sem nenhum atalho vira texto fixo: no envio em lista todo mundo
+  // recebe exatamente as mesmas palavras. É o erro mais comum de quem não pegou
+  // o propósito da tela, então avisamos antes de salvar.
+  if (!PLACEHOLDER_RE.test(t.body || '')) {
+    const ok = window.confirm(
+      'Este modelo não usa nenhum atalho (como {contato} ou {saudacao}).\n\n' +
+      'Os atalhos são o motivo de criar um modelo: no envio em lista, cada cliente ' +
+      'recebe o próprio nome, a saudação da hora certa e o resto já preenchido. ' +
+      'Sem atalhos, todos recebem exatamente o mesmo texto — e aí um modelo não ' +
+      'ajuda muito.\n\n' +
+      'Toque em um atalho na lista abaixo do campo de mensagem para inserir.\n\n' +
+      'Salvar assim mesmo?'
+    );
+    if (!ok) return;
+  }
   if (!isOnline() || !sessionValid()) { toast('Conecte à internet para salvar', 'err'); return; }
   try {
     const res = await fetch(apiUrl('/api/templates'), {
@@ -362,14 +381,14 @@ async function saveTemplate() {
     await pullTemplates();
     state.msg = toMsg(data.template);
     render();
-    toast('Template salvo ✓', 'ok');
+    toast('Modelo salvo ✓', 'ok');
   } catch (e: any) { toast('Erro: ' + e.message, 'err'); }
 }
 
 async function deleteTemplate() {
   const t = state.msg;
   if (!t.id) { state.msg = { ...EMPTY_MSG }; render(); return; }
-  if (!window.confirm('Excluir o template “' + t.title + '”?')) return;
+  if (!window.confirm('Excluir o modelo “' + t.title + '”?')) return;
   if (!isOnline() || !sessionValid()) { toast('Conecte à internet para excluir', 'err'); return; }
   try {
     const res = await fetch(apiUrl('/api/templates?id=' + encodeURIComponent(String(t.id))), {
@@ -381,7 +400,7 @@ async function deleteTemplate() {
     await pullTemplates();
     selectFirstTemplate();
     render();
-    toast('Template excluído', 'ok');
+    toast('Modelo excluído', 'ok');
   } catch (e: any) { toast('Erro: ' + e.message, 'err'); }
 }
 
@@ -458,7 +477,7 @@ function listaMenuHTML(): string {
 
   return `
     <h2>Enviar em lista</h2>
-    <p class="status-line" style="margin:-4px 0 12px">Template atual: <b>${esc(state.msg.title || '(sem título)')}</b>. Escolha para quem enviar:</p>
+    <p class="status-line" style="margin:-4px 0 12px">Modelo atual: <b>${esc(state.msg.title || '(sem título)')}</b>. Escolha para quem enviar:</p>
     ${categorias.length ? catsHTML : '<p class="status-line">Nenhuma categoria automática disponível ainda.</p>'}
     <div class="sheet-subhead">Minhas listas</div>
     ${listasHTML || '<p class="status-line">Você ainda não criou nenhuma lista.</p>'}
@@ -491,7 +510,7 @@ function wireListaMenu() {
 
 function openListaSheet() {
   if (!state.msg.body.trim()) {
-    toast('Escreva ou escolha um template antes de montar a lista', 'err');
+    toast('Escreva ou escolha um modelo antes de montar a lista', 'err');
     return;
   }
   listaDirty = false;

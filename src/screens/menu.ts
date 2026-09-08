@@ -49,7 +49,7 @@ export function openMenu() {
     </button>
     <button class="menu-item" id="mi-msg">
       <span class="mi-ico">📝</span>
-      <span>Mensagens<small>Templates de WhatsApp</small></span>
+      <span>Mensagens<small>Modelos de WhatsApp</small></span>
     </button>
     <button class="menu-item" id="mi-clientes">
       <span class="mi-ico">🗂️</span>
