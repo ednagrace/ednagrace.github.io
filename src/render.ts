@@ -2,7 +2,7 @@ import { sessionValid, state, save, load } from './state.js';
 import { LS } from './env.js';
 import { setBackAction } from './nav.js';
 import { showLogin } from './screens/login.js';
-import { renderForm, formBack, formCanLeave } from './screens/form.js';
+import { renderForm, formBack, formCanLeave, formHasDraft } from './screens/form.js';
 import { renderPanel, panelBack } from './screens/panel.js';
 import { renderMsg, msgBack, msgCanLeave } from './screens/messages.js';
 import { renderImport, importBack, importCanLeave } from './screens/import.js';
@@ -73,12 +73,13 @@ function syncHash() {
   }
 }
 
-/* What a cold start should reopen. The form and the "pick a client" mode are
-   transient (their unsaved state is gone once the app is killed), so we save a
-   safe landing screen for those instead. */
+/* What a cold start should reopen. The "pick a client" mode is transient (its
+   state is gone once the app is killed), so we save a safe landing screen for it.
+   The form now autosaves a draft: while one exists we reopen the form (form.ts
+   restores what was typed); with no draft it falls back to the list. */
 function persistRoute() {
   let r: string = state.view;
-  if (state.view === 'form') r = 'list';
+  if (state.view === 'form') r = formHasDraft() ? 'form' : 'list';
   if (state.view === 'customers' && state.customersPickMode) r = 'msg';
   try { save(LS.lastRoute, r); } catch (e) {}
 }

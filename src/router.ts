@@ -21,7 +21,7 @@ import { openPanel } from './screens/panel.js';
 import { openMsg } from './screens/messages.js';
 import { openImport } from './screens/import.js';
 import { openCustomers } from './screens/customers.js';
-import { openForm, openNew } from './screens/form.js';
+import { openForm, openNew, resumeFormDraft } from './screens/form.js';
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -53,6 +53,7 @@ const RESUME: Record<string, () => void> = {
   msg:       openMsg,
   import:    openImport,
   customers: openCustomers,
+  form:      resumeFormDraft,
 };
 
 /* Called once at boot, after the session check. Returns true when it already

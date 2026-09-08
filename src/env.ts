@@ -30,6 +30,7 @@ export const LS = {
   customers: PREFIX + 'customers',
   customLists: PREFIX + 'customLists',
   lastRoute: PREFIX + 'lastRoute',   // which screen a cold start reopens (see router.ts)
+  formDraft: PREFIX + 'formDraft',   // unsaved report form, restored on a cold start (see screens/form.ts)
 };
 
 // Fixed site config — the same for any browser/device.

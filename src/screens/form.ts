@@ -1,11 +1,11 @@
 import type { Field, Report } from '../types.js';
 import { GROUPS, ALL_FIELDS, NUMERIC_KEYS, PROPOSTAS_KEYS,
   PJ_PROPOSTAS_FIELDS, PJ_NUMERIC_KEYS, ALL_NUMERIC_KEYS } from '../constants.js';
-import { state, save, sessionValid } from '../state.js';
+import { state, save, load, sessionValid } from '../state.js';
 import { LS } from '../env.js';
 import { app, render, goHome } from '../render.js';
 import { todayISO, monthKeyOf, parseISO, pad } from '../dateUtils.js';
-import { esc, byId, informed, haptic, numOrNull } from '../format.js';
+import { esc, byId, informed, haptic, num, numOrNull } from '../format.js';
 import { metaFor, metaDiaVal } from '../aggregations.js';
 import { isOnline, getReport, enqueue, upsertCache, apiSave, deleteReportByDate } from '../api.js';
 import { aiPhotoMeta, sendPhotoReport, setAiQuota } from '../api.js';
@@ -23,24 +23,110 @@ let editSnapshot = '';
 let formTab: 'comum' | 'pj' = 'comum';
 function pjTabOn(): boolean { return !!state.config.metaPJAtiva; }
 
+/* ---------------- Rascunho do formulário (sobrevive ao fechamento do app) ----------------
+   Celulares simples matam o PWA assim que a promotora troca de app. O que ela
+   digitou e ainda não salvou fica gravado aqui, e o app reabre exatamente neste
+   formulário (ver router.ts / render.ts). O rascunho é apagado ao salvar, excluir
+   ou descartar ("Voltar" com confirmação). Rascunhos com mais de 7 dias são
+   ignorados. Fica no mesmo namespace de ambiente (edna. / edna.staging.). */
+interface FormDraft {
+  data: string;
+  editingNew: boolean;
+  editing: Report;
+  tab: 'comum' | 'pj';
+  ts: number;
+}
+const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+// In-memory mirror of "há rascunho gravado?", kept in sync by save/clearDraft so
+// render.ts can decide a cold start reopens the form without hitting localStorage
+// on every render.
+let hasDraft = false;
+try { hasDraft = !!localStorage.getItem(LS.formDraft); } catch (e) {}
+export function formHasDraft(): boolean { return hasDraft; }
+
+function saveDraft() {
+  if (state.view !== 'form' || !state.editing || !formDirty()) { clearDraft(); return; }
+  const d: FormDraft = {
+    data: (state.editing as Report).data,
+    editingNew: !!state.editingNew,
+    editing: state.editing as Report,
+    tab: formTab,
+    ts: Date.now(),
+  };
+  try {
+    save(LS.formDraft, d);
+    save(LS.lastRoute, 'form');   // render() may not run again before the app is killed
+    hasDraft = true;
+  } catch (e) {}
+}
+
+function clearDraft() {
+  hasDraft = false;
+  try {
+    localStorage.removeItem(LS.formDraft);
+    if (load<string>(LS.lastRoute, 'list') === 'form') save(LS.lastRoute, 'list');
+  } catch (e) {}
+}
+
+function readDraft(): FormDraft | null {
+  const d = load<FormDraft | null>(LS.formDraft, null);
+  if (!d || !d.editing || !d.data) return null;
+  if (!d.ts || Date.now() - d.ts > DRAFT_TTL_MS) { clearDraft(); return null; }
+  return d;
+}
+
+let draftTimer: ReturnType<typeof setTimeout> | undefined;
+function scheduleDraftSave() {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(saveDraft, 500);
+}
+
+/* The app is going to the background (app switch, screen off) — the moment a cheap
+   Android is most likely to kill the PWA. Flush the draft right now, synchronously. */
+export function initFormDraft() {
+  if (typeof document === 'undefined') return;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { clearTimeout(draftTimer); saveDraft(); }
+  });
+  window.addEventListener('pagehide', () => { clearTimeout(draftTimer); saveDraft(); });
+}
+
+/* Cold start landed on 'form' (see render.ts): rebuild the form from the saved
+   draft. Delegates to openNew / openForm, which already restore a matching draft. */
+export function resumeFormDraft() {
+  const d = readDraft();
+  if (!d) { state.view = 'list'; render(); return; }
+  if (d.editingNew) openNew();
+  else openForm(d.data);
+}
+
 export function openForm(dataISO: string) {
   const existing = getReport(dataISO);
-  state.editing = existing || blankReport(dataISO);
+  const clean = existing || blankReport(dataISO);
+  // Um rascunho não salvo desta mesma data volta com o que já foi digitado.
+  const draft = readDraft();
+  const useDraft = !!draft && !draft.editingNew && draft.data === dataISO;
+  state.editing = useDraft ? draft!.editing : clean;
   state.editingNew = !existing;
-  formTab = 'comum';
-  editSnapshot = JSON.stringify(state.editing);
+  formTab = useDraft && draft!.tab === 'pj' ? 'pj' : 'comum';
+  editSnapshot = JSON.stringify(clean);
   state.view = 'form';
   resetPhoto();
   render();
   window.scrollTo(0, 0);
 }
 
-// Always starts blank (zeroed out), title "New".
+// Always starts blank (zeroed out), title "New" — a menos que haja um rascunho de
+// relatório novo não salvo, que volta com o que já foi digitado.
 export function openNew() {
-  state.editing = blankReport(todayISO());
+  const draft = readDraft();
+  const useDraft = !!draft && draft.editingNew;
+  const clean = blankReport(useDraft ? draft!.editing.data : todayISO());
+  state.editing = useDraft ? draft!.editing : clean;
   state.editingNew = true;
-  formTab = 'comum';
-  editSnapshot = JSON.stringify(state.editing);
+  formTab = useDraft && draft!.tab === 'pj' ? 'pj' : 'comum';
+  editSnapshot = JSON.stringify(clean);
   state.view = 'form';
   resetPhoto();
   render();
@@ -56,6 +142,7 @@ function formDirty(): boolean {
 // "Voltar"/"Cancelar" and the phone's back button all land here.
 export function formBack() {
   if (!confirmDiscard(formDirty())) return;
+  clearDraft();
   state.view = 'list';
   render();
 }
@@ -63,7 +150,9 @@ export function formBack() {
 // May we leave the form right now? (HOME button / deep link) — only after the
 // same "discard what you typed?" check the back button does.
 export function formCanLeave(): boolean {
-  return confirmDiscard(formDirty());
+  if (!confirmDiscard(formDirty())) return false;
+  clearDraft();
+  return true;
 }
 
 // The PDF is built from what's on screen, so it only makes sense once that has
@@ -195,6 +284,7 @@ async function onPhotoPicked(f: File) {
     formTab = 'comum';   // a foto lê o relatório comum — volta pra essa aba pra conferência
     render();   // rebuilds the counters with the values read
     window.scrollTo(0, 0);
+    scheduleDraftSave();
     toast('Confira os números lidos da foto ✍️', 'ok');
   } catch (err: any) {
     p.busy = false;
@@ -282,9 +372,12 @@ export function renderForm() {
 
       <div class="bulk-fill">
         <button type="button" class="bulk-btn" id="btn-bulk-zero">0️⃣ Zerar tudo</button>
-        <button type="button" class="bulk-btn" id="btn-bulk-clear">🧹 Limpar tudo</button>
+        <button type="button" class="bulk-btn" id="btn-bulk-clear">🚫 Tudo indisponível</button>
       </div>
-      <div class="daily-hint" style="margin:4px 0 0">Contador vazio salva como N/A — não entra nas contas.</div>
+      <div class="daily-hint" style="margin:4px 0 0">
+        "—" quer dizer <b>indisponível</b>: você não anotou esse número.
+        É diferente de <b>0</b>, que é um resultado ("hoje fiz 0 SMS").
+      </div>
 
       ${groupsHTML}
 
@@ -309,8 +402,8 @@ export function renderForm() {
   byId('btn-bulk-clear').onclick = () => bulkFill(null);
   byId('btn-back').onclick = byId('btn-cancel').onclick = formBack;
   byId('btn-home').onclick = goHome;
-  byId('f-data').onchange = (e: Event) => { r.data = (e.target as HTMLInputElement).value; refreshPdfBtn(); };
-  byId('f-obs').oninput = (e: Event) => { r.obs = (e.target as HTMLTextAreaElement).value; refreshPdfBtn(); };
+  byId('f-data').onchange = (e: Event) => { r.data = (e.target as HTMLInputElement).value; refreshPdfBtn(); scheduleDraftSave(); };
+  byId('f-obs').oninput = (e: Event) => { r.obs = (e.target as HTMLTextAreaElement).value; refreshPdfBtn(); scheduleDraftSave(); };
   byId('btn-save').onclick = onSave;
   byId('btn-pdf').onclick = () => sharePDF(Object.assign({}, r));
   if (byId('btn-del')) byId('btn-del').onclick = onDelete;
@@ -338,11 +431,12 @@ export function renderForm() {
 
 async function onDelete() {
   const r = state.editing as Report;
-  if (!getReport(r.data)) { state.view = 'list'; render(); return; }
+  if (!getReport(r.data)) { clearDraft(); state.view = 'list'; render(); return; }
   const btn = byId('btn-del');
   if (btn) btn.disabled = true;
   const ok = await deleteReportByDate(r.data);
   if (ok) {
+    clearDraft();
     state.view = 'list';
     render();
     toast('Relatório excluído', 'ok');
@@ -389,14 +483,16 @@ function counterHTML(f: Field, val: any): string {
         </div>
       </div>
       <div class="quick" style="grid-template-columns: repeat(${cols}, 1fr)">${quick.join('')}</div>
-      ${f.dailyMeta ? `<div class="daily-hint ${informed(val) && val >= metaDiaVal() ? 'hit' : ''}" id="dhint-${f.key}">${dailyHintText(val)}</div>` : ''}
+      ${f.dailyMeta ? `<div class="daily-hint ${num(val) >= metaDiaVal() ? 'hit' : ''}" id="dhint-${f.key}">${dailyHintText(val)}</div>` : ''}
     </div>`;
 }
 
+// "Meta do dia" é META, não contagem: um dia sem Aprovadas anotadas conta como
+// 0 do objetivo (nunca "—"). O contador em si continua mostrando "—".
 function dailyHintText(val: any): string {
   const md = metaDiaVal();
-  if (!informed(val)) return `🎯 Meta do dia: — / ${md}`;
-  return val >= md ? `🎯 Meta do dia batida! (${val}/${md})` : `🎯 Meta do dia: ${val} / ${md}`;
+  const v = num(val);
+  return v >= md ? `🎯 Meta do dia batida! (${v}/${md})` : `🎯 Meta do dia: ${v} / ${md}`;
 }
 
 function wireCounter(f: Field, r: Report) {
@@ -414,10 +510,11 @@ function wireCounter(f: Field, r: Report) {
     });
     if (f.dailyMeta) {
       const dh = byId('dhint-' + f.key);
-      if (dh) { dh.textContent = dailyHintText(v); dh.classList.toggle('hit', informed(v) && (v as number) >= metaDiaVal()); }
+      if (dh) { dh.textContent = dailyHintText(v); dh.classList.toggle('hit', num(v) >= metaDiaVal()); }
     }
     if (PROPOSTAS_KEYS.includes(f.key) || PJ_NUMERIC_KEYS.includes(f.key)) updatePropostasBadge(r);
     refreshPdfBtn();
+    scheduleDraftSave();
   }
   // n === null => N/A; a number => that value. Also writes the input (buttons/steppers use this).
   function set(n: number | null) {
@@ -454,22 +551,24 @@ function wireCounter(f: Field, r: Report) {
   });
 }
 
-/* "Zerar tudo" / "Limpar tudo" — preenche de uma vez todos os contadores do
-   relatório. `0` marca o dia como "sem nada" (conta como zero nas metas/somas);
-   `null` deixa vazio (N/A, não entra nas contas). Só mexe nas chaves PJ quando a
-   aba PJ está ligada. Pede confirmação se já houver algum contador preenchido. */
+/* "Zerar tudo" / "Tudo indisponível" — preenche de uma vez todos os contadores
+   do relatório. `0` é um resultado registrado; `null` = indisponível ("—"), ou
+   seja, número não anotado. (Meta é à parte: na barra de meta um campo "—" já
+   conta como 0.) Só mexe nas chaves PJ quando a aba PJ está ligada. Pede
+   confirmação se já houver contador preenchido. */
 function bulkFill(v: 0 | null) {
   const r = state.editing as Report;
   const keys = pjTabOn() ? ALL_NUMERIC_KEYS : NUMERIC_KEYS;
   const hasData = keys.some(k => informed(r[k]));
   if (hasData && !window.confirm(v === 0
-      ? 'Zerar todos os contadores deste relatório?'
-      : 'Deixar todos os contadores vazios (N/A)?')) return;
+      ? 'Colocar 0 em todos os contadores?'
+      : 'Deixar todos os contadores como indisponíveis ("—")?')) return;
   keys.forEach(k => { r[k] = v; });
   render();                 // rebuilds every counter with the new value
   window.scrollTo(0, 0);
+  scheduleDraftSave();
   haptic();
-  toast(v === 0 ? 'Todos os contadores em 0' : 'Contadores vazios — salvam como N/A', 'ok');
+  toast(v === 0 ? 'Todos os contadores em 0' : 'Contadores marcados como indisponíveis', 'ok');
 }
 
 async function onSave() {
@@ -510,6 +609,8 @@ async function onSave() {
   state.editingNew = false;
   state.month = monthKeyOf(r.data);
   editSnapshot = JSON.stringify(state.editing);
+  clearTimeout(draftTimer);
+  clearDraft();
   render();
   toast(sent ? 'Relatório salvo no servidor ✓'
              : 'Salvo no celular — envia quando tiver internet ⏳',

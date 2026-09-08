@@ -9,7 +9,7 @@ import { render } from './render.js';
 import { initNav } from './nav.js';
 import { initRouter, applyInitialRoute } from './router.js';
 import { syncNow, postAuthInit } from './api.js';
-import { quickCols } from './screens/form.js';
+import { quickCols, initFormDraft } from './screens/form.js';
 import { showLogin } from './screens/login.js';
 
 /* ---------------- Global events ---------------- */
@@ -33,6 +33,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) sync
 function boot() {
   initNav();             // hardware "back" navigates inside the app, doesn't exit the PWA
   initRouter();           // deep links ('#/painel', …) + resume the last screen on a cold start
+  initFormDraft();       // autosave do rascunho do formulário quando o app vai pro background
   showTestBanner();      // amber banner if we're in the test environment
   applyHeaderColor();    // header color (production) or amber (staging)
   checkEnvironment();    // and the API confirms (or denies) which environment this is
