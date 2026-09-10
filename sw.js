@@ -2,15 +2,15 @@
    Estratégia: CACHE PRIMEIRO (rápido para a promotora) + revalidação em segundo plano.
    Quando uma versão nova é detectada, ela ativa na hora e a página recarrega sozinha.
    Troque a versão a cada atualização. */
-const CACHE = 'edna-relatorio-v78';
+const CACHE = 'edna-relatorio-v79';
 // URLs VERSIONADAS: uma versão nova muda a URL, então o navegador é obrigado a
 // baixar de novo — não tem como o cache HTTP (max-age=600 do GitHub Pages) servir
 // o arquivo velho. Use ./bump.sh <n> para trocar a versão em todos os lugares.
 const ASSETS = [
   './',
   './index.html',
-  './styles.css?v=78',
-  './build/main.js?v=78',
+  './styles.css?v=79',
+  './build/main.js?v=79',
   './build/state.js',
   './build/env.js',
   './build/constants.js',
@@ -21,7 +21,7 @@ const ASSETS = [
   './build/router.js',
   './build/theme.js',
   './build/aggregations.js',
-  './build/contacts.js',
+  './build/customers.js',
   './build/api.js',
   './build/photo.js',
   './build/auth.js',
@@ -35,6 +35,7 @@ const ASSETS = [
   './build/screens/messages.js',
   './build/screens/import.js',
   './build/screens/menu.js',
+  './build/screens/customers.js',
   './build/components/contatoSheet.js',
   './manifest.webmanifest',
   './icons/icon.svg',
@@ -43,13 +44,25 @@ const ASSETS = [
 /* Ao instalar, busca os arquivos IGNORANDO o cache HTTP do navegador.
    Sem o { cache: 'reload' }, o addAll pode gravar a versão VELHA que ainda estava no
    cache HTTP do GitHub Pages (Cache-Control: max-age=600). Era o bug que travava o app
-   numa versão antiga: o SW dizia "v33", mas servia o app.js "v31". */
+   numa versão antiga: o SW dizia "v33", mas servia o app.js "v31".
+
+   Cada arquivo é baixado À PARTE (não com addAll): assim UM arquivo que sumiu da lista
+   — ex.: um módulo renomeado — não derruba a instalação inteira. Sem isto, um 404 num
+   único asset fazia o SW nunca instalar, e aí `navigator.serviceWorker.ready` nunca
+   resolvia e as notificações push (que dependem dele) ficavam presas para sempre. */
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE)
-      .then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' }))))
-      .then(() => self.skipWaiting())
-  );
+  e.waitUntil((async () => {
+    const c = await caches.open(CACHE);
+    await Promise.allSettled(
+      ASSETS.map(async (u) => {
+        try {
+          const res = await fetch(new Request(u, { cache: 'reload' }));
+          if (res.ok) await c.put(u, res);
+        } catch (err) { /* segue sem esse arquivo; o fetch handler pega da rede depois */ }
+      })
+    );
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', (e) => {
