@@ -4,6 +4,7 @@ import { state, save, sessionValid } from './state.js';
 import { LS } from './env.js';
 import { toast } from './ui.js';
 import { render } from './render.js';
+import { applyInitialRoute } from './router.js';
 import { postAuthInit } from './api.js';
 import { showDenied, showLogin } from './screens/login.js';
 
@@ -51,9 +52,13 @@ export async function onGoogleCredential(resp: any) {
       if (r.status === 403) return showDenied(data.email || '');
       return toast(data.error || 'Falha no login', 'err');
     }
+    // Coming from the login screen (no valid session) → reopen where the promotora
+    // was (unsaved form draft, last screen), like a cold start with a valid session.
+    // A silent mid-session refresh just re-renders the current screen.
+    const wasLoggedOut = !sessionValid();
     state.session = { token: data.session, email: data.email, name: data.name || '', exp: data.exp };
     save(LS.session, state.session);
-    render();
+    if (!(wasLoggedOut && applyInitialRoute())) render();
     postAuthInit();
   } catch (e) {
     toast('Sem conexão para completar o login', 'err');
